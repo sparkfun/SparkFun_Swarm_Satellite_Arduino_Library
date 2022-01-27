@@ -1260,6 +1260,141 @@ void SWARM_M138::pruneBacklog()
   free(event);
 }
 
+/**************************************************************************/
+/*!
+    @brief  Convert modem status enum into printable text
+    @param  status
+            The modem status (enumerated)
+    @return A pointer to the modem status in string (const char) format
+*/
+/**************************************************************************/
+const char *SWARM_M138::modemStatusString(Swarm_M138_Modem_Status_e status)
+{
+  switch (status)
+  {
+    case SWARM_M138_MODEM_STATUS_BOOT_ABORT:
+      return "BOOT ABORT (Restart after firmware crash)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_POWERON:
+      return "BOOT POWERON (Power has been applied)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_RUNNING:
+      return "BOOT RUNNING (Boot has completed. Ready to accept commands)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_UPDATED:
+      return "BOOT UPDATED (A firmware update was performed)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_VERSION:
+      return "BOOT VERSION (Firmware version)";
+      break;
+    case SWARM_M138_MODEM_STATUS_DATETIME:
+      return "DATETIME (GPS has acquired a valid date/time reference)";
+      break;
+    case SWARM_M138_MODEM_STATUS_POSITION:
+      return "POSITION (GPS has acquired a valid position 3D fix)";
+      break;
+    case SWARM_M138_MODEM_STATUS_DEBUG:
+      return "DEBUG (Debug message): ";
+      break;
+    case SWARM_M138_MODEM_STATUS_ERROR:
+      return "ERROR (Error message): ";
+      break;
+  }
+  return "UNKNOWN";
+}
+
+/**************************************************************************/
+/*!
+    @brief  Convert modem error enum into printable text
+    @param  error
+            The modem error (enumerated)
+    @return A pointer to the modem error in string (const char) format
+*/
+/**************************************************************************/
+const char *modemErrorString(Swarm_M138_Error_e error)
+{
+  switch (error)
+  {
+    case SWARM_M138_ERROR_ERROR:
+      return "Just a plain old communication error";
+      break;
+    case SWARM_M138_ERROR_SUCCESS:
+      return "Hey, it worked!";
+      break;
+    case SWARM_M138_ERROR_TIMEOUT:
+      return "Communication timeout";
+      break;
+    case SWARM_M138_ERROR_INVALID_CHECKSUM:
+      return "Indicates the command response checksum was invalid";
+      break;
+    case SWARM_M138_ERROR_ERR:
+      return "Command input error (ERR)";
+      break;
+    case SWARM_M138_ERROR_MM_BADPARAM:
+      return "Messages Received Management : invalid command or argument";
+      break;
+    case SWARM_M138_ERROR_MM_DBXINVMSGID:
+      return "Messages Received Management : invalid message ID";
+      break;
+    case SWARM_M138_ERROR_MM_DBXNOMORE:
+      return "Messages Received Management : no messages found";
+      break;
+    case SWARM_M138_ERROR_MT_BADPARAM:
+      return "Messages To Transmit Management : invalid command or argument";
+      break;
+    case SWARM_M138_ERROR_MT_DBXINVMSGID:
+      return "Messages To Transmit Management : invalid message ID";
+      break;
+    case SWARM_M138_ERROR_MT_DBXNOMORE:
+      return "Messages To Transmit Management : no messages found";
+      break;
+    case SWARM_M138_ERROR_SL_TIMENOTSET:
+      return "Sleep Mode : time not yet set from GPS";
+      break;
+    case SWARM_M138_ERROR_SL_BADPARAM:
+      return "Sleep Mode : invalid seconds / dateTime";
+      break;
+    case SWARM_M138_ERROR_SL_NOCOMMAND:
+      return "Sleep Mode : No S or U partameter";
+      break;
+    case SWARM_M138_ERROR_SL_NOTIME:
+      return "Sleep Mode : attempt to sleep before time is set";
+      break;
+    case SWARM_M138_ERROR_TD_BADAPPID:
+      return "Transmit Data : invalid application ID";
+      break;
+    case SWARM_M138_ERROR_TD_BADDATA:
+      return "Transmit Data : Message has odd number or non-hex characters when sending data as hexadecimal";
+      break;
+    case SWARM_M138_ERROR_TD_BADEXPIRETIME:
+      return "Transmit Data : Invalid hold time";
+      break;
+    case SWARM_M138_ERROR_TD_ERR:
+      return "Transmit Data : Unspecified error";
+      break;
+    case SWARM_M138_ERROR_TD_HOLDTIMEEXPIRED:
+      return "Transmit Data : Unable to send within requested hold time";
+      break;
+    case SWARM_M138_ERROR_TD_NODEVICEID:
+      return "Transmit Data : The Swarm device ID has not yet been set - contact Swarm Support";
+      break;
+    case SWARM_M138_ERROR_TD_NOSPACE:
+      return "Transmit Data : No space for message";
+      break;
+    case SWARM_M138_ERROR_TD_TIMENOTSET:
+      return "Transmit Data : Attempt to send message before time set by GPS";
+      break;
+    case SWARM_M138_ERROR_TD_DBXTOHIVEFULL:
+      return "Transmit Data : Queue for queued messages is full. Maximum of 2048 messages may be held in the queue.";
+      break;
+    case SWARM_M138_ERROR_TD_TOOLONG:
+      return "Transmit Data : Message is too large to send";
+      break;
+  }
+
+  return "UNKNOWN";
+}
+
 // GPS Helper Functions:
 
 // Read a source string until a delimiter is hit, store the result in destination
