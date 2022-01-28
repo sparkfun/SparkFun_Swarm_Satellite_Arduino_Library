@@ -71,6 +71,8 @@
 #include <SoftwareSerial.h> // SoftwareSerial.h is guarded. It is OK to include it twice.
 #endif
 
+#include <Wire.h> // Needed for I2C communication with Qwiic Swarm
+
 /** The number of the digital pin connected to GPIO1 can be passed to begin */
 #define SWARM_M138_GPIO1_PIN -1 ///< _GPIO1Pin will default to no pin
 
@@ -86,6 +88,9 @@
 /** Swarm packet length */
 #define SWARM_M138_MAX_PACKET_LENGTH_BYTES 192 ///< The maximum packet length - defined as binary bytes
 #define SWARM_M138_MAX_PACKET_LENGTH_HEX 384 ///< The maximum packet length - encoded as ASCII Hex
+
+/** Minimum memory allocations for each message type */
+#define SWARM_M138_MEM_ALLOC_CS 38 // E.g. $CS DI=0x000e57,DN=Modem*10\n . Should be 28 but maybe Modem could be longer than 5 bytes?
 
 /** Suported Commands */
 const char SWARM_M138_COMMAND_CONFIGURATION[] = "$CS";    ///< Configuration Settings
@@ -111,6 +116,7 @@ typedef enum
 {
   SWARM_M138_ERROR_ERROR = 0,           ///< Just a plain old communication error
   SWARM_M138_ERROR_SUCCESS,             ///< Hey, it worked!
+  SWARM_M138_ERROR_MEM_ALLOC,           ///< Memory allocation error
   SWARM_M138_ERROR_TIMEOUT,             ///< Communication timeout
   SWARM_M138_ERROR_INVALID_CHECKSUM,    ///< Indicates the command response checksum was invalid
   SWARM_M138_ERROR_ERR,                 ///< Command input error (ERR)
@@ -249,8 +255,8 @@ typedef enum
   SWARM_M138_MODEM_STATUS_ERROR // Error message (data - error text)  
 } Swarm_M138_Modem_Status_e;
 
-/** Communication interface for the Swarm M138 satellite modem. Inherits the Print Class. */
-class SWARM_M138 : public Print
+/** Communication interface for the Swarm M138 satellite modem. */
+class SWARM_M138
 {
 public:
   // Constructor
@@ -267,12 +273,14 @@ public:
 
   /** Debug prints */
   void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
+  void disableDebugging(void); //Turn off debug printing
 
   /** Commands */
 
   /** Configuration Settings */
   Swarm_M138_Error_e getConfigurationSettings(char *settings); // Get the Swarm device ID and type name
-  Swarm_M138_Error_e getDeviceID(unit32_t *id); // Get the Swarm device ID
+  Swarm_M138_Error_e getDeviceID(uint32_t *id); // Get the Swarm device ID
+  bool isConnected(void); // isConnected calls getDeviceID
 
   /** Date/Time */
   Swarm_M138_Error_e getDateTime(Swarm_M138_DateTimeData_t *dateTime); // Get the most recent $DT message
@@ -339,7 +347,7 @@ public:
   Swarm_M138_Error_e deleteTxMessage(uint64_t id); // Delete TX message with ID
   Swarm_M138_Error_e deleteAllTxMessages(void); // Delete all unsent messages
   Swarm_M138_Error_e listTxMessage(uint64_t id, char *asciiHex, uint32_t *epoch = NULL); // List unsent message with ID
-  Swarm_M138_Error_e listTxMessagesIDs(uint64_t[] *ids); // List the IDs of all unsent messages. Call getUnsentMessageCount first so you know how many IDs to expect
+  Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids); // List the IDs of all unsent messages. Call getUnsentMessageCount first so you know how many IDs to expect
 
   /** Transmit Data */
   // The application ID is optional. Valid appID's are: 0 to 64999. Swarm reserves use of 65000 - 65535.
@@ -360,25 +368,20 @@ public:
   bool checkUnsolicitedMsg(void);
 
   /** Callbacks (called by checkUnsolicitedMsg) */
-  void setDateTimeCallback(void (*_swarmDateTimeCallback)(const Swarm_M138_DateTimeData_t *dateTime)); // Set callback for $DT
-  void setGpsJammingCallback(void (*_swarmGpsJammingCallback)(const Swarm_M138_GPS_Jamming_Indication_t *jamming)); // Set callback for $GJ
-  void setGeospatialInfoCallback(void (*_swarmGeospatialCallback)(const Swarm_M138_GeospatialData_t *info)); // Set callback for $GN
-  void setGpsFixQualityCallback(void (*_swarmGpsFixQualityCallback)(const Swarm_M138_GPS_Fix_Quality_t *fixQuality)); // Set callback for $GS
-  void setPowerStatusCallback(void (*_swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *status)); // Set callback for $PW
-  void setReceiveMessageCallback(void (*_swarmReceiveMessageCallback)(const uint16_t *appID, const int16_t *rssi, const int16_t *snr, const int16_t *fdev, const char *asciiHex)); // Set callback for $RD
-  void setReceiveTestCallback(void (*_swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest)); // Set callback for $RT
-  void setSleepWakeCallback(void (*_swramSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL
-  void setModemStatusCallback(void (*_swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data)); // Set callback for $M138. data will be NULL if status is < SWARM_M138_MODEM_STATUS_DEBUG
-  void setTransmitDataCallback(void (*_swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id)); // Set callback for $TD SENT
+  void setDateTimeCallback(void (*swarmDateTimeCallback)(const Swarm_M138_DateTimeData_t *dateTime)); // Set callback for $DT
+  void setGpsJammingCallback(void (*swarmGpsJammingCallback)(const Swarm_M138_GPS_Jamming_Indication_t *jamming)); // Set callback for $GJ
+  void setGeospatialInfoCallback(void (*swarmGeospatialCallback)(const Swarm_M138_GeospatialData_t *info)); // Set callback for $GN
+  void setGpsFixQualityCallback(void (*swarmGpsFixQualityCallback)(const Swarm_M138_GPS_Fix_Quality_t *fixQuality)); // Set callback for $GS
+  void setPowerStatusCallback(void (*swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *status)); // Set callback for $PW
+  void setReceiveMessageCallback(void (*swarmReceiveMessageCallback)(const uint16_t *appID, const int16_t *rssi, const int16_t *snr, const int16_t *fdev, const char *asciiHex)); // Set callback for $RD
+  void setReceiveTestCallback(void (*swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest)); // Set callback for $RT
+  void setSleepWakeCallback(void (*swramSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL
+  void setModemStatusCallback(void (*swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data)); // Set callback for $M138. data will be NULL if status is < SWARM_M138_MODEM_STATUS_DEBUG
+  void setTransmitDataCallback(void (*swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id)); // Set callback for $TD SENT
 
   /** Convert modem status enum etc. into printable text */
   const char *modemStatusString(Swarm_M138_Modem_Status_e status);
   const char *modemErrorString(Swarm_M138_Error_e error);
-
-  /** Direct write/print to modem serial port */
-  virtual size_t write(uint8_t c);
-  virtual size_t write(const char *str);
-  virtual size_t write(const char *buffer, size_t size);
 
 private:
   HardwareSerial *_hardSerial;
@@ -388,24 +391,20 @@ private:
 
   unsigned long _baud; // Baud rate for serial communication with the modem
 
-  TwoWire* _i2cPort; // The I2C (Wire) port for the Qwiic Swarm
-  byte _address; // I2C address of the Qwiic Swarm
+  Stream *_debugPort; //The stream to send debug messages to if enabled. Usually Serial.
+  bool _printDebug; //Flag to print debugging variables
 
-  Stream *_debugPort;       //The stream to send debug messages to if enabled. Usually Serial.
-  bool _printDebug = false; //Flag to print debugging variables
+  int _gpio1Pin; // digital pin connected to GPIO1 (if provided)
 
-  int _gpio1Pin = SWARM_M138_GPIO1_PIN; // digital pin connected to GPIO1 (if provided)
-
-  bool _checkUnsolicitedMsgReentrant = false; // Prevent reentry of checkUnsolicitedMsg - just in case it gets called from a callback
+  bool _checkUnsolicitedMsgReentrant; // Prevent reentry of checkUnsolicitedMsg - just in case it gets called from a callback
 
   #define _RxBuffSize 512
-  const unsigned long _rxWindowMillis = 1; // Wait up to 1ms for any more serial characters to arrive
+  const unsigned long _rxWindowMillis = 5; // Wait up to 5ms for any more serial characters to arrive
   char *_swarmRxBuffer; // Allocated in SWARM_M138::begin
   char *_pruneBuffer;
   char *_swarmBacklog;
 
   // Callbacks for unsolicited messages
-  void (*_swarmDateTimeCallback)(Swarm_M138_DateTimeData_t *dateTime);
   void (*_swarmDateTimeCallback)(const Swarm_M138_DateTimeData_t *dateTime);
   void (*_swarmGpsJammingCallback)(const Swarm_M138_GPS_Jamming_Indication_t *jamming);
   void (*_swarmGeospatialCallback)(const Swarm_M138_GeospatialData_t *info);
@@ -413,44 +412,60 @@ private:
   void (*_swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *status);
   void (*_swarmReceiveMessageCallback)(const uint16_t *appID, const int16_t *rssi, const int16_t *snr, const int16_t *fdev, const char *asciiHex);
   void (*_swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest);
-  void (*_swramSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause);
+  void (*_swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause);
   void (*_swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data);
   void (*_swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id);
 
-  Swarm_M138_Error_e init(unsigned long baud, SWARM_M138_init_type_t initType = SWARM_M138_INIT_STANDARD);
+  // Add the two NMEA checksum bytes and line feed to a command
+  void addChecksumLF(char *command);
 
-  // Wait for an expected response (don't send a command)
-  Swarm_M138_Error_e waitForResponse(const char *expectedResponse, const char *expectedError, uint16_t timeout);
+  // Send command with the start of an expected response 
+  Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponseStart, char *responseDest,
+                                             int destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
 
-  // Send command with an expected (potentially partial) response or error
-  Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponse, const char *expectedError,
-                                             unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
-
-  // Send a command
+  // Send a command (don't wait for a response)
   void sendCommand(const char *command);
 
-  Swarm_M138_Error_e parseDateTimeIndication(char *dateTime);
+  // Wait for an expected response or error (don't send a command)
+  Swarm_M138_Error_e waitForResponse(const char *expectedResponse, const char *expectedError, unsigned long timeout);
 
-  // UART Functions
-  size_t hwPrint(const char *s);
-  size_t hwWriteData(const char *buff, int len);
-  size_t hwWrite(const char c);
-  int readAvailable(char *inString);
-  char readChar(void);
-  int hwAvailable(void);
-  void beginSerial(unsigned long baud);
-  void setTimeout(unsigned long timeout);
-  bool find(char *target);
-
-  char *swarm_m138_calloc_char(size_t num);
-
-  bool initializeBuffers();
+  bool initializeBuffers(void);
   bool processUnsolicitedEvent(const char *event);
   void pruneBacklog(void);
 
+  // Support for Qwiic Swarm
+
+  TwoWire* _i2cPort; // The I2C (Wire) port for the Qwiic Swarm
+  byte _address; // I2C address of the Qwiic Swarm
+  int qwiicSwarmAvailable(void); // Check how many serial bytes Qwiic Sawrm has in its buffer
+  int qwiicSwarmReadChars(int len, char *dest); // Read bytes from Qwiic Swarm
+  int qwiicSwarmWriteChars(int len, const char *dest); // Write bytes to Qwiic Swarm
+  unsigned long _lastI2cCheck;
+  #define QWIIC_SWARM_I2C_POLLING_WAIT_MS 2 // Avoid pounding the I2C bus. Wait at least 2ms between calls to qwiicSwarmAvailable
+  //Define the I2C 'registers'
+  #define QWIIC_SWARM_LEN_REG 0xFD // The serial length regsiter: 2 bytes (MSB, LSB) indicating how many serial characters are available to be read
+  #define QWIIC_SWARM_DATA_REG 0xFF // The serial data register: used to read and write serial data from/to the modem
+  //Define the maximum number of serial bytes to be requested from the ATtiny841
+  #define QWIIC_SWARM_SER_PACKET_SIZE 8
+   //Qwiic Iridium ATtiny841 I2C buffer length
+   #define QWIIC_SWARM_I2C_BUFFER_LENGTH 32
+
+  // Memory allocation
+
+  char *swarm_m138_calloc_char(size_t num);
+
   // GPS Helper functions
-  char *readDataUntil(char *destination, unsigned int destSize, char *source, char delimiter);
-  bool parseGeospatial(char *geospatialString, PositionData *pos, ClockData *clk, SpeedData *spd);
+  //char *readDataUntil(char *destination, unsigned int destSize, char *source, char delimiter);
+  //bool parseGeospatial(char *geospatialString, PositionData *pos, ClockData *clk, SpeedData *spd);
+
+  // UART / I2C Functions
+  size_t hwPrint(const char *s);
+  size_t hwWriteData(const char *buff, int len);
+  size_t hwWrite(const char c);
+  int hwAvailable(void);
+  int hwReadChars(char *buf, int len);
+
+  void beginSerial(unsigned long baud);
 };
 
 #endif //SPARKFUN_SWARM_M138_ARDUINO_LIBRARY_H
