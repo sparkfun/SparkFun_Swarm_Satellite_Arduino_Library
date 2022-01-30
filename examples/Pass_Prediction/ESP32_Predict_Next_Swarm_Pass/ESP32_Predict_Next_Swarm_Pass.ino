@@ -36,11 +36,13 @@
 
 Sgp4 sat;
 
-unsigned long unixTime = 1643716800; // Feb 1st 2022 : 12:00:00 UTC
+unsigned long unixTime = 1643539800; // Sun Jan 30 2022 10:50:00 UTC
 
 double myLat = 55.000; // Latitude 55 degrees North
 double myLon = -1.000; // Longitude 1 degree West
 double myAlt = 100.00; // Altitude 100m Above Sea Level
+
+double minimumElevation = 15.0; // Predict passes which have an elevation higher than 15 degrees
 
 int timezone = 0 ;  // Time Zone relative to UTC
 
@@ -67,23 +69,23 @@ void Predict(int many){
 
     for (int i = 0; i<many ; i++){
       
-        error = sat.nextpass(&overpass,20);     //search for the next overpass, if there are more than 20 maximums below the horizon it returns false
+        error = sat.nextpass(&overpass, 20, false, minimumElevation); //search for the next overpass, if there are more than 20 maximums below the minimumElevation it returns false
         delay(0);
     
         if ( error == 1){ //no error, prints overpass information
           
           invjday(overpass.jdstart ,timezone ,true , year, mon, day, hr, minute, sec);
-          Serial.println("Overpass: " + String(day) + '/' + String(mon) + '/' + String(year));
-          Serial.println("  Start: az=" + String(overpass.azstart) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
+          Serial.println("  Overpass: " + String(day) + '/' + String(mon) + '/' + String(year));
+          Serial.println("    Start: az=" + String(overpass.azstart) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
           
           invjday(overpass.jdmax ,timezone ,true , year, mon, day, hr, minute, sec);
-          Serial.println("  Max: elev=" + String(overpass.maxelevation) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
+          Serial.println("    Max: elev=" + String(overpass.maxelevation) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
           
           invjday(overpass.jdstop ,timezone ,true , year, mon, day, hr, minute, sec);
-          Serial.println("  Stop: az=" + String(overpass.azstop) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
+          Serial.println("    Stop: az=" + String(overpass.azstop) + "° " + String(hr) + ':' + String(minute) + ':' + String(sec));
           
         }else{
-            Serial.println("Prediction error");
+            Serial.println("  Prediction error");
         }
         delay(0);
     }
@@ -123,15 +125,6 @@ void setup()
     while (1)
       ;
   }
-
-  //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  // Display TLE epoch time
-  
-  double jdC = sat.satrec.jdsatepoch;
-  invjday(jdC , timezone, true, year, mon, day, hr, minute, sec);
-  Serial.println();
-  Serial.println("Epoch: " + String(day) + '/' + String(mon) + '/' + String(year) + ' ' + String(hr) + ':' + String(minute) + ':' + String(sec));
-  Serial.println();
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Read the Two-Line Element for each satellite from file and calculate the next pass
@@ -180,6 +173,13 @@ void setup()
 
       sat.init(satelliteName, lineOne, lineTwo); //initialize satellite parameters     
     
+      // Display TLE epoch time
+      // Note: this is the epoch time from the TLE, not the unixTime for the prediction
+      double jdC = sat.satrec.jdsatepoch;
+      invjday(jdC , timezone, true, year, mon, day, hr, minute, sec);
+      Serial.println("  TLE Epoch: " + String(day) + '/' + String(mon) + '/' + String(year) + ' ' + String(hr) + ':' + String(minute) + ':' + String(sec));
+      Serial.println();
+      
       Predict(1); //Calculates the next overpass
       
     }
