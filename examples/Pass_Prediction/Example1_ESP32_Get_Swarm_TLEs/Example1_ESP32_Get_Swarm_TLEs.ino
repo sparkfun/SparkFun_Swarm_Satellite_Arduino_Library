@@ -94,10 +94,10 @@ const int maxSats = 120;
 // (When ~24 hours of passes have been processed)
 #define satPassLimit 6
 
-// Check for a match: start_pass +/- 5 seconds (in Julian Days)
-const double predictionStartError = 5.0 / (24.0 * 60.0 * 60.0);
-// Check for a match: max_elevation +/- 5 degrees (accuracy is worst at Zenith, much better at the horizon)
-const double maxElevationError = 5.0;
+// Check for a match: start_pass +/- 2.0 seconds (in Julian Days)
+const double predictionStartError = 0.000023;
+// Check for a match: max_elevation +/- 4.0 degrees (accuracy is worst at Zenith, much better towards the horizon)
+const double maxElevationError = 4.0;
 
 #define nzOffset 100000 // Add this to the satellite number to indicate SPACEBEENZ
 
@@ -587,14 +587,20 @@ void setup()
         file.print("SPACEBEENZ-");
         file.println(foundSats[i] - nzOffset);
         Serial.print("SPACEBEENZ-");
-        Serial.println(foundSats[i] - nzOffset);
+        Serial.print(foundSats[i] - nzOffset);
+        Serial.print("\t(");
+        Serial.print(satPassCount[i]);
+        Serial.println(" passes)");
       }
       else if (foundSats[i] > 0)
       {
         file.print("SPACEBEE-");
         file.println(foundSats[i]);
         Serial.print("SPACEBEE-");
-        Serial.println(foundSats[i]);
+        Serial.print(foundSats[i]);
+        Serial.print("\t(");
+        Serial.print(satPassCount[i]);
+        Serial.println(" passes)");
       }
     }
     Serial.println();
