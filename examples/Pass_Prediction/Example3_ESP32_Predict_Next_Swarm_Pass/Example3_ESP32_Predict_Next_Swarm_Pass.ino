@@ -55,7 +55,8 @@ double minimumElevation = 15.0; //                        <-- Update this if req
 #include <SD.h>
 #include <SPI.h>
 
-const int sd_cs = 5; //Thing Plus C microSD chip select
+#define sd_cs SS // microSD chip select - this should work on most boards
+//const int sd_cs = 5; //Uncomment this line to define a specific pin for the chip select (e.g. pin 5 on the Thing Plus C)
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -79,7 +80,7 @@ void setup()
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Begin the SD card and open the file
   
-  if (!SD.begin(SS)) {
+  if (!SD.begin(sd_cs)) {
     Serial.println("Card Mount Failed! Freezing...");
     while (1)
       ;

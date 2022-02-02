@@ -40,15 +40,18 @@
 
 */
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include "secrets.h"
-
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
 
-const int sd_cs = 5; //SparkFun Thing Plus C microSD chip select pin
+#define sd_cs SS // microSD chip select - this should work on most boards
+//const int sd_cs = 5; //Uncomment this line to define a specific pin for the chip select (e.g. pin 5 on the Thing Plus C)
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include "secrets.h"
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -57,12 +60,14 @@ const int sd_cs = 5; //SparkFun Thing Plus C microSD chip select pin
 Sgp4 sat;
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// The Two-Line Element orbit data will be downloaded from CelesTrak
 
 const char celestrakServer[] = "https://celestrak.com";
 
 const char getSwarmTLE[] = "NORAD/elements/gp.php?GROUP=SWARM&FORMAT=TLE";
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// The Swarm Pass-Checker data can be downloaded from their server
 
 const char swarmPassCheckerServer[] = "https://bumblebee.hive.swarm.space";
 
@@ -73,14 +78,16 @@ const char lonPrefix[] = "&lon=";
 const char altPrefix[] = "&alt=";
 const char mergeSuffix[] = "&merge=false";
 
-const char myLatitude[] = "55.000";   //                  <-- Update this with your latitude
-const char myLongitude[] = "-1.000";  //                  <-- Update this with your longitude
-const char myAltitude[] = "100";      //                  <-- Update this with your altitude in m
+const char myLatitude[] =   "55.000";     //                  <-- Update this with your latitude
+const char myLongitude[] =  "-1.000";     //                  <-- Update this with your longitude
+const char myAltitude[] =   "100";        //                  <-- Update this with your altitude in m
 
 // The pass checker data is returned in non-pretty JSON format:
-#define startOfFirstStartPass 26 // start_pass: YYYY-MM-DDTHH:MM:SSZ
+#define startOfFirstStartPass 32  // 8000\r\n{"passes":[{"start_pass":"YYYY-MM-DDTHH:MM:SSZ
+                                  // ----- - --------------------------^
 #define startPassDateTimeLength 19
-#define elevationOffset 75 // Offset from the start_pass "Z" to the start of the max_elevation
+#define endOffset 15 // Offset from the start_pass "Z" to the start of the end_pass
+#define elevationOffset 41 // Offset from the end_pass "Z" to the start of the max_elevation
 #define startOffset 12 // Offset from the "s" of start_pass to the start of the year
 
 // At the time or writing:
@@ -91,13 +98,18 @@ const char myAltitude[] = "100";      //                  <-- Update this with y
 const int maxSats = 120;
 
 // Stop checking when we find this many satellite duplications for a single satellite
-// (When ~24 hours of passes have been processed)
-#define satPassLimit 6
+// (When > 24 hours of passes have been processed)
+#define satPassLimit 7
 
-// Check for a match: start_pass +/- 2.0 seconds (in Julian Days)
-const double predictionStartError = 0.000023;
-// Check for a match: max_elevation +/- 4.0 degrees (accuracy is worst at Zenith, much better towards the horizon)
-const double maxElevationError = 4.0;
+// Ignore any false positives (satellites with fewer than this many passes)
+#define satPassFloor 2
+
+// Check for a match: start_pass +/- 5.0 seconds (in Julian Days)
+const double predictionStartError = 0.000058;
+// Check for a match: end_pass +/- 5.0 seconds (in Julian Days)
+const double predictionEndError = 0.000058;
+// Check for a match: max_elevation +/- 5.0 degrees (accuracy is worst at Zenith, much better towards the horizon)
+const double maxElevationError = 5.0;
 
 #define nzOffset 100000 // Add this to the satellite number to indicate SPACEBEENZ
 
@@ -114,7 +126,7 @@ void setup()
   Serial.println(F("Press any key to begin..."));
   while (!Serial.available()); // Wait for a keypress
   Serial.println();
-/*
+
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Connect to WiFi.
 
@@ -128,6 +140,23 @@ void setup()
   Serial.println();
 
   Serial.println(F("WiFi connected!"));
+
+  //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  // Open the file for the TLE data so we can stream the HTTP GET straight to file
+
+  if (!SD.begin(sd_cs)) {
+    Serial.println("Card Mount Failed! Freezing...");
+    while (1)
+      ;
+  }
+
+  File tleFile = SD.open("/swarmTLE.txt", FILE_WRITE);
+  if (!tleFile)
+  {
+    Serial.println(F("Could not open swarmTLE.txt for writing! Freezing..."));
+    while (1)
+      ;
+  }  
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Use HTTP GET to receive the TLE data
@@ -162,16 +191,54 @@ void setup()
     // If the GET was successful, read the data
     if(httpCode == HTTP_CODE_OK) // Check for code 200
     {
+      // Code taken from the ESP32 ReuseConnection example. Mostly...
+      
       payloadSize = http.getSize();
       Serial.printf("Server returned %d bytes\r\n", payloadSize);
-      
-      payload = http.getString(); // Get the payload
+      if (payloadSize == -1)
+        Serial.println(F("(That is OK. It means there is no Content-Length header.)"));
+      Serial.print(F("Reading data"));
 
-      // Print the payload
-      //for(int i = 0; i < payloadSize; i++)
-      //{
-      //  Serial.write(payload[i]);
-      //}
+      // Create a buffer for the bytes
+      uint8_t *content = new uint8_t[512]; // Read up to 512 bytes at a time (SD write chunk)
+      *content = 0; // Clear the first byte
+
+      // Get TCP stream
+      WiFiClient *stream = http.getStreamPtr();
+
+      unsigned long dataArrival = millis(); // Timeout
+
+      // Read all the data from the server
+      while ((http.connected())
+              && ((payloadSize > 0) || (payloadSize == -1))
+              && (millis() < (dataArrival + 5000))) // Timeout after 5 seconds
+      {
+        // Get available data size
+        size_t avail = stream->available();
+
+        if (avail)
+        {
+          // Read up to 512 bytes
+          int howMany = stream->readBytes(content, ((avail > 512) ? 512 : avail));
+
+          // Write it to file
+          tleFile.write(content, howMany);
+
+          if (payloadSize > 0)
+            payloadSize -= howMany;
+
+          if (millis() > (dataArrival + 1000))
+          {
+            Serial.print(F(".")); // Print a dot every second
+            dataArrival = millis();
+          }
+        }
+        delay(1);
+      }
+
+      Serial.println();
+
+      delete[] content; // Deallocate the buffer
     }
   }
   else
@@ -179,18 +246,25 @@ void setup()
     Serial.printf("[HTTP] GET... failed, error: %s\r\n", http.errorToString(httpCode).c_str());
   }
 
+  http.end();
+
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  // Save the TLE data to SD card
-*/
-  if (!SD.begin(SS)) {
-    Serial.println("Card Mount Failed! Freezing...");
-    while (1)
-      ;
-  }
-/*
-  writeFile(SD, "/swarmTLE.txt", payload.c_str()); // Write the payload to file
+  // Close the TLE file
+
+  tleFile.close();
 
   Serial.println(F("The Swarm TLE data has been saved to SD card"));
+
+  //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  // Open the file for the Swarm Pass-Checker data so we can stream the HTTP GET straight to file
+
+  File ppFile = SD.open("/swarmPP.txt", FILE_WRITE);
+  if (!ppFile)
+  {
+    Serial.println(F("Could not open swarmPP.txt for writing! Freezing..."));
+    while (1)
+      ;
+  }  
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Use HTTP GET to receive the Swarm pass prediction for your location
@@ -211,13 +285,14 @@ void setup()
     myAltitude,
     mergeSuffix);
 
-  Serial.println(F("Requesting the Swarm pass prediction"));
+  Serial.println(F("Requesting the Swarm pass-checker data"));
   Serial.print(F("HTTP URL is: "));
   Serial.println(theURL);
 
-  http.begin(theURL);
+  HTTPClient http2;
+  http2.begin(theURL);
 
-  httpCode = http.GET();
+  httpCode = http2.GET();
 
   // httpCode will be negative on error
   if(httpCode > 0)
@@ -228,16 +303,54 @@ void setup()
     // If the GET was successful, read the data
     if(httpCode == HTTP_CODE_OK) // Check for code 200
     {
-      payloadSize = http.getSize();
-      Serial.printf("Server returned %d bytes\r\n", payloadSize);
+      // Code taken from the ESP32 ReuseConnection example. Mostly...
       
-      payload = http.getString(); // Get the payload
+      payloadSize = http2.getSize();
+      Serial.printf("Server returned %d bytes\r\n", payloadSize);
+      if (payloadSize == -1)
+        Serial.println(F("(That is OK. It means there is no Content-Length header.)"));
+      Serial.print(F("Reading data"));
 
-      // Print the payload
-      //for(int i = 0; i < payloadSize; i++)
-      //{
-      //  Serial.write(payload[i]);
-      //}
+      // Create a buffer for the bytes
+      uint8_t *content = new uint8_t[512]; // Read up to 512 bytes at a time (SD write chunk)
+      *content = 0; // Clear the first byte
+
+      // Get TCP stream
+      WiFiClient *stream2 = http2.getStreamPtr();
+
+      unsigned long dataArrival = millis(); // Timeout
+
+      // Read all the data from the server
+      while ((http2.connected())
+              && ((payloadSize > 0) || (payloadSize == -1))
+              && (millis() < (dataArrival + 5000))) // Timeout after 5 seconds
+      {
+        // Get available data size
+        size_t avail = stream2->available();
+
+        if (avail)
+        {
+          // Read up to 512 bytes
+          int howMany = stream2->readBytes(content, ((avail > 512) ? 512 : avail));
+
+          // Write it to file
+          ppFile.write(content, howMany);
+
+          if (payloadSize > 0)
+            payloadSize -= howMany;
+
+          if (millis() > (dataArrival + 1000))
+          {
+            Serial.print(F(".")); // Print a dot every second
+            dataArrival = millis();
+          }
+        }
+        delay(1);
+      }
+
+      Serial.println();
+
+      delete[] content; // Deallocate the buffer
     }
   }
   else
@@ -245,15 +358,15 @@ void setup()
     Serial.printf("[HTTP] GET... failed, error: %s\r\n", http.errorToString(httpCode).c_str());
   }
 
-  http.end();
+  http2.end();
   
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-  // Save the pass prediction to SD card
+  // Close the file
 
-  writeFile(SD, "/swarmPP.txt", payload.c_str()); // Write the payload to file
+  ppFile.close();
 
-  Serial.println(F("The Swarm pass prediction has been saved to SD card"));
-*/
+  Serial.println(F("The Swarm pass-checker data has been saved to SD card"));
+
   listDir(SD, "/", 0); // List the card directory to see if the files were written correctly
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -294,9 +407,9 @@ void setup()
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Open the pass prediction file for reading
 
-  File ppFile = SD.open("/swarmPP.txt", FILE_READ);
+  ppFile = SD.open("/swarmPP.txt", FILE_READ);
   if (!ppFile) {
-    Serial.println("Pass Prediction File Open Failed! Freezing...");
+    Serial.println(F("Pass Prediction File Open Failed! Freezing..."));
     while (1)
       ;
   }
@@ -309,8 +422,10 @@ void setup()
   }
 
   Serial.println();
-  Serial.println("Starting the pass prediction calculations. This will take a LONG time! Go make a cup of tea...");
-
+  Serial.println(F("Starting the pass prediction calculations. This will take a LONG time! Go make a cup of tea..."));
+  Serial.println();
+  Serial.println(F("(No match will be found for satellites already above the horizon)"));
+  
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Step through the pass prediction file, extract the start_pass and max_elevation
   //
@@ -346,6 +461,46 @@ void setup()
 
     Serial.print(F("  Julian Day: "));
     Serial.print(predictionStart, 5);
+
+    //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    // Extract the end_pass
+
+    for (int i = 0; i < endOffset; i++) // Point at the end_pass
+    {
+      if (ppFile.readBytes(&fileChar, 1) != 1)
+      {
+        keepGoing = false;
+      }
+    }
+
+    if (!keepGoing) // Exit the while loop if we hit the end of the file
+    {
+      Serial.println();
+      break;
+    }
+
+    char endPass[startPassDateTimeLength + 1];
+    endPass[startPassDateTimeLength] = 0; // Null-terminate the dateTime
+    if (ppFile.readBytes((char *)&endPass, startPassDateTimeLength) != startPassDateTimeLength)
+    {
+      keepGoing = false;
+      break;
+    }
+
+    //Serial.print(F("  end_pass: "));
+    //Serial.print(endPass);
+
+    // Convert it to Julian Day
+    if (sscanf(endPass, "%4d-%2d-%2dT%2d:%2d:%2d", &year, &month, &day, &hour, &minute, &second) != 6)
+    {
+      keepGoing = false;
+      break;      
+    }
+    double predictionEnd;
+    jday(year, month, day, hour, minute, second, 0, false, predictionEnd);
+
+    Serial.print(F("  end_pass Julian Day: "));
+    Serial.print(predictionEnd, 5);
 
     //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
     // Extract the max_elevation
@@ -390,15 +545,15 @@ void setup()
     // For each satellite, perform our own pass prediction using our location and predictionStart.
     // Record if we have a match.
 
-    File tleFile = SD.open("/swarmTLE.txt", FILE_READ);
+    tleFile = SD.open("/swarmTLE.txt", FILE_READ);
     if (!tleFile) {
-      Serial.println("TLE File Open Failed! Freezing...");
+      Serial.println(F("TLE File Open Failed! Freezing..."));
       while (1)
         ;
     }
 
     bool keepReadingTLEs = true;
-  
+
     while (keepReadingTLEs)
     {
   
@@ -434,15 +589,17 @@ void setup()
       {
         sat.init(satelliteName, lineOne, lineTwo); //initialize satellite parameters     
 
-        double overpassStart = 0.0, overpassMaxElev = 0.0;
+        double overpassStart = 0.0, overpassEnd = 0.0, overpassMaxElev = 0.0;
         double maxElevationDbl = (double)maxElevation;
 
         // Calculate the next overpass
         // Start one minute early 
-        if (Predict(predictionStart - (1.0 / (24.0 * 60.0)), &overpassStart, &overpassMaxElev))
+        if (Predict(predictionStart - (1.0 / (24.0 * 60.0)), &overpassStart, &overpassEnd, &overpassMaxElev))
         {
           if  ((overpassStart < (predictionStart + predictionStartError)) // Check for a match
             && (overpassStart > (predictionStart - predictionStartError))
+            && (overpassEnd < (predictionEnd + predictionEndError))
+            && (overpassEnd > (predictionEnd - predictionEndError))
             && (overpassMaxElev < (maxElevationDbl + maxElevationError))
             && (overpassMaxElev > (maxElevationDbl - maxElevationError)))
           {
@@ -451,6 +608,8 @@ void setup()
 
             Serial.print(F("Prediction result was: start_pass Julian Day: "));
             Serial.print(overpassStart, 5);
+            Serial.print(F("  end_pass Julian Day: "));
+            Serial.print(overpassEnd, 5);
             Serial.print(F("  max_elevation: "));
             Serial.println(overpassMaxElev, 3);
           
@@ -582,25 +741,28 @@ void setup()
   {
     for (int i = 0; i < foundNumSats; i++)
     {
-      if (foundSats[i] > nzOffset)
+      if (satPassCount[i] >= satPassFloor) // Make sure the satellite has been seen at least satPassFloor times
       {
-        file.print("SPACEBEENZ-");
-        file.println(foundSats[i] - nzOffset);
-        Serial.print("SPACEBEENZ-");
-        Serial.print(foundSats[i] - nzOffset);
-        Serial.print("\t(");
-        Serial.print(satPassCount[i]);
-        Serial.println(" passes)");
-      }
-      else if (foundSats[i] > 0)
-      {
-        file.print("SPACEBEE-");
-        file.println(foundSats[i]);
-        Serial.print("SPACEBEE-");
-        Serial.print(foundSats[i]);
-        Serial.print("\t(");
-        Serial.print(satPassCount[i]);
-        Serial.println(" passes)");
+        if (foundSats[i] > nzOffset)
+        {
+          file.print("SPACEBEENZ-");
+          file.println(foundSats[i] - nzOffset);
+          Serial.print(F("SPACEBEENZ-"));
+          Serial.print(foundSats[i] - nzOffset);
+          Serial.print(F("\t("));
+          Serial.print(satPassCount[i]);
+          Serial.println(F(" passes)"));
+        }
+        else if (foundSats[i] > 0)
+        {
+          file.print("SPACEBEE-");
+          file.println(foundSats[i]);
+          Serial.print(F("SPACEBEE-"));
+          Serial.print(foundSats[i]);
+          Serial.print(F("\t("));
+          Serial.print(satPassCount[i]);
+          Serial.println(F(" passes)"));
+        }
       }
     }
     Serial.println();
@@ -624,9 +786,10 @@ void loop()
 // Predict the next satellite pass.
 // Start the prediction at startTimeJD (Julian Day).
 // Return the start of the pass in overpassStart (Julian Day).
+// Return the end of the pass in overpassEnd (Julian Day).
 // Return the maximum elevation in maxElevation.
 // Return true if the prediction was successful.
-bool Predict(double startTimeJD, double *overpassStart, double *maxElevation)
+bool Predict(double startTimeJD, double *overpassStart, double *overpassEnd, double *maxElevation)
 {
   passinfo overpass;                      //structure to store overpass info
   sat.initpredpoint( startTimeJD , 0.0 ); //finds the startpoint
@@ -645,6 +808,7 @@ bool Predict(double startTimeJD, double *overpassStart, double *maxElevation)
     //Serial.println("    Max Elevation = " + String(overpass.maxelevation) + "°");
 
     *overpassStart = overpass.jdstart;
+    *overpassEnd = overpass.jdstop;
     *maxElevation = overpass.maxelevation;
   }
   else
@@ -662,46 +826,28 @@ void listDir(fs::FS &fs, const char * dirname, uint8_t levels) {
 
   File root = fs.open(dirname);
   if (!root) {
-    Serial.println("Failed to open directory");
+    Serial.println(F("Failed to open directory"));
     return;
   }
   if (!root.isDirectory()) {
-    Serial.println("Not a directory");
+    Serial.println(F("Not a directory"));
     return;
   }
 
   File file = root.openNextFile();
   while (file) {
     if (file.isDirectory()) {
-      Serial.print("  DIR : ");
+      Serial.print(F("  DIR : "));
       Serial.println(file.name());
       if (levels) {
         listDir(fs, file.name(), levels - 1);
       }
     } else {
-      Serial.print("\tFILE: ");
+      Serial.print(F("\tFILE: "));
       Serial.print(file.name());
-      Serial.print("\tSIZE: ");
+      Serial.print(F("\tSIZE: "));
       Serial.println(file.size());
     }
     file = root.openNextFile();
   }
-}
-
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-void writeFile(fs::FS &fs, const char * path, const char * message) {
-  Serial.printf("Writing file: %s\n", path);
-
-  File file = fs.open(path, FILE_WRITE);
-  if (!file) {
-    Serial.println("Failed to open file for writing");
-    return;
-  }
-  if (file.print(message)) {
-    Serial.println("File written");
-  } else {
-    Serial.println("Write failed");
-  }
-  file.close();
 }

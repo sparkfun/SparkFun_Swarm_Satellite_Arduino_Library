@@ -36,23 +36,25 @@
 
 */
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include "secrets.h"
-
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
 
-const int sd_cs = 5; //SparkFun Thing Plus C microSD chip select pin
+#define sd_cs SS // microSD chip select - this should work on most boards
+//const int sd_cs = 5; //Uncomment this line to define a specific pin for the chip select (e.g. pin 5 on the Thing Plus C)
 
-#include <time.h> // Note: this is the standard C time library - not Time.h
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include "secrets.h"
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #include "SWARM_NORAD.h"
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// The Two-Line Element orbit data will be downloaded from CelesTrak
 
 const char celestrakServer[] = "https://celestrak.com";
 
@@ -93,7 +95,7 @@ void setup()
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Open mySwarm.txt for reading. Open mySwmTLE.txt for writing.
 
-  if (!SD.begin(SS)) {
+  if (!SD.begin(sd_cs)) {
     Serial.println("Card Mount Failed! Freezing...");
     while (1)
       ;
