@@ -375,77 +375,55 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
     }
     delete dateTime;
   }
-  // { // URC: +UULOC (Localization information - CellLocate and hybrid positioning)
-  //   ClockData clck;
-  //   PositionData gps;
-  //   SpeedData spd;
-  //   unsigned long uncertainty;
-  //   int scanNum;
-  //   int latH, lonH, alt;
-  //   unsigned int speedU, cogU;
-  //   char latL[10], lonL[10];
-  //   int dateStore[5];
+  { // $GJ - jamming indication
+    Swarm_M138_GPS_Jamming_Indication_t *jamming = new Swarm_M138_GPS_Jamming_Indication_t;
+    char *eventStart;
+    char *eventEnd;
 
-  //   // Maybe we should also scan for +UUGIND and extract the activated gnss system?
+    eventStart = strstr(event, "$GJ ");
+    if (eventStart != NULL)
+    {
+      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+      if (eventEnd != NULL)
+      {
+        if (eventEnd >= (eventStart + 3)) // Check we have enough data
+        {
+          // Extract the spoof_state and jamming_level
+          char c;
+          eventStart += 4; // Point to the spoof_state
 
-  //   // This assumes the ULOC response type is "0" or "1" - as selected by gpsRequest detailed
-  //   scanNum = sscanf(event,
-  //                     "+UULOC: %d/%d/%d,%d:%d:%d.%d,%d.%[^,],%d.%[^,],%d,%lu,%u,%u,%*s",
-  //                     &dateStore[0], &dateStore[1], &clck.date.year,
-  //                     &dateStore[2], &dateStore[3], &dateStore[4], &clck.time.ms,
-  //                     &latH, latL, &lonH, lonL, &alt, &uncertainty,
-  //                     &speedU, &cogU);
-  //   clck.date.day = dateStore[0];
-  //   clck.date.month = dateStore[1];
-  //   clck.time.hour = dateStore[2];
-  //   clck.time.minute = dateStore[3];
-  //   clck.time.second = dateStore[4];
+          jamming->spoof_state = 0; // Clear the existing spoof_state
+          c = *eventStart;
+          eventStart++;
+          if ((c >= '0') && (c <= '9')) jamming->spoof_state = (uint8_t)(c - '0'); // Get the spoof_state
 
-  //   if (scanNum >= 13)
-  //   {
-  //     // Found a Location string!
-  //     if (_printDebug == true)
-  //     {
-  //       _debugPort->println(F("processReadEvent: location"));
-  //     }
+          eventStart++; // Skip over the comma
 
-  //     if (latH >= 0)
-  //       gps.lat = (float)latH + ((float)atol(latL) / pow(10, strlen(latL)));
-  //     else
-  //       gps.lat = (float)latH - ((float)atol(latL) / pow(10, strlen(latL)));
-  //     if (lonH >= 0)
-  //       gps.lon = (float)lonH + ((float)atol(lonL) / pow(10, strlen(lonL)));
-  //     else
-  //       gps.lon = (float)lonH - ((float)atol(lonL) / pow(10, strlen(lonL)));
-  //     gps.alt = (float)alt;
-  //     if (scanNum >= 15) // If detailed response, get speed data
-  //     {
-  //       spd.speed = (float)speedU;
-  //       spd.cog = (float)cogU;
-  //     }
+          jamming->jamming_level = 0; // Clear the existing jamming_level
+          c = *eventStart; // Get the first digit of the jamming_level
+          while (c != '*') // Keep going until we hit the asterix
+          {
+            if ((c >= '0') && (c <= '9')) // Extract the jamming_level one digit at a time
+            {
+              jamming->jamming_level = jamming->jamming_level * 10;
+              jamming->jamming_level = jamming->jamming_level + (uint8_t)(c - '0');
+            }
+            eventStart++;
+            c = *eventStart; // Get the next digit
+          }
 
-  //     // if (_printDebug == true)
-  //     // {
-  //     //   _debugPort->print(F("processReadEvent: location:  lat: "));
-  //     //   _debugPort->print(gps.lat, 7);
-  //     //   _debugPort->print(F(" lon: "));
-  //     //   _debugPort->print(gps.lon, 7);
-  //     //   _debugPort->print(F(" alt: "));
-  //     //   _debugPort->print(gps.alt, 2);
-  //     //   _debugPort->print(F(" speed: "));
-  //     //   _debugPort->print(spd.speed, 2);
-  //     //   _debugPort->print(F(" cog: "));
-  //     //   _debugPort->println(spd.cog, 2);
-  //     // }
+          if (_swarmGpsJammingCallback != NULL)
+          {
+            _swarmGpsJammingCallback((const Swarm_M138_GPS_Jamming_Indication_t *)jamming); // Call the callback
+          }
 
-  //     if (_gpsRequestCallback != NULL)
-  //     {
-  //       _gpsRequestCallback(clck, gps, spd, uncertainty);
-  //     }
-
-  //     return true;
-  //   }
-  // }
+          delete jamming;
+          return (true);
+        }
+      }
+    }
+    delete jamming;
+  }
   return false;
 } // /processUnsolicitedEvent
 
@@ -827,6 +805,288 @@ Swarm_M138_Error_e SWARM_M138::setDateTimeRate(uint32_t rate)
 
 /**************************************************************************/
 /*!
+    @brief  Read the modem firmware version using the $FV message
+    @param  settings
+            A pointer to where the settings will be stored
+            It is recommended that the user allocates at least
+            SWARM_M138_MEM_ALLOC_FV bytes to store the settings
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getFirmwareVersion(char *version)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_FIRMWARE_VER) + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_FIRMWARE_VER) + 5); // Clear it
+  sprintf(command, "%s*", SWARM_M138_COMMAND_FIRMWARE_VER); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$FV ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$FV ");
+    if (responseStart == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+    responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if (responseEnd == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Copy the response to *settings
+    responseStart += 4; // Start at the 'D'
+    memcpy(version, responseStart, responseEnd - responseStart);
+
+    // Add a null-terminator
+    version[responseEnd - responseStart] = 0;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Get the most recent $GJ message
+    @param  dateTime
+            A pointer to a Swarm_M138_DateTimeData_t struct which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getGpsJammingIndication(Swarm_M138_GPS_Jamming_Indication_t *jamming)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 7); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_GPS_JAMMING); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$GJ ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$GJ ");
+    if (responseStart == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+    responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if (responseEnd == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    if (responseEnd < (responseStart + 3)) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the spoof_state and jamming_level
+    char c;
+    responseStart += 4; // Point to the spoof_state
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) jamming->spoof_state = (uint8_t)(c - '0'); // Get the spoof_state
+
+    responseStart++; // Skip over the comma
+
+    jamming->jamming_level = 0; // Clear the existing jamming_level
+    c = *responseStart; // Get the first digit of the jamming_level
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the jamming_level one digit at a time
+      {
+        jamming->jamming_level = jamming->jamming_level * 10;
+        jamming->jamming_level = jamming->jamming_level + (uint8_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit
+    }
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query the current $GJ rate
+    @param  rate
+            A pointer to a uint32_t which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getGpsJammingIndicationRate(uint32_t *rate)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 7); // Clear it
+  sprintf(command, "%s ?*", SWARM_M138_COMMAND_GPS_JAMMING); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$GJ ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$GJ ");
+    if (responseStart == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+    responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if (responseEnd == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the rate
+    char c;
+    uint32_t theRate = 0;
+    responseStart += 4; // Point at the first digit of the rate
+
+    c = *responseStart; // Get the first digit of the rate
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
+      {
+        theRate = theRate * 10;
+        theRate += (uint32_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the rate
+    }
+
+    *rate = theRate;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+
+/**************************************************************************/
+/*!
+    @brief  Set the rate of $GJ jamming indication messages
+    @param  rate
+            The interval between messages
+            0 == Disable. Max is 2147483647 (2^31 - 1)
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_RATE if the rate is invalid
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setGpsJammingIndicationRate(uint32_t rate)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Check rate is within bounds
+  if (rate > SWARM_M138_MAX_MESSAGE_RATE)
+    return (SWARM_M138_ERROR_INVALID_RATE);
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 1 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 1 + 10 + 5); // Clear it
+  sprintf(command, "%s %u*", SWARM_M138_COMMAND_GPS_JAMMING, rate); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$GJ OK*", "$GJ ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Set up the callback for the $DT Date Time message
     @param  _swarmDateTimeCallback
             The address of the function to be called when an unsolicited $DT message arrives
@@ -835,6 +1095,18 @@ Swarm_M138_Error_e SWARM_M138::setDateTimeRate(uint32_t rate)
 void SWARM_M138::setDateTimeCallback(void (*swarmDateTimeCallback)(const Swarm_M138_DateTimeData_t *dateTime))
 {
   _swarmDateTimeCallback = swarmDateTimeCallback;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Set up the callback for the $GJ jamming indication message
+    @param  _swarmGpsJammingCallback
+            The address of the function to be called when an unsolicited $GJ message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setGpsJammingCallback(void (*swarmGpsJammingCallback)(const Swarm_M138_GPS_Jamming_Indication_t *jamming))
+{
+  _swarmGpsJammingCallback = swarmGpsJammingCallback;
 }
 
 /**************************************************************************/
@@ -925,7 +1197,7 @@ const char *SWARM_M138::modemErrorString(Swarm_M138_Error_e error)
 /*!
     @brief  Convert command error into a printable description
     @param  ERR
-            The commad error as const char *
+            The command error as const char *
     @return A pointer to the command error description in string (const char) format
 */
 /**************************************************************************/

@@ -65,6 +65,8 @@ void printDateTime(const Swarm_M138_DateTimeData_t *dateTime)
 
 void setup()
 {
+  delay(1000);
+  
   Serial.begin(115200);
   while (!Serial)
     ; // Wait for the user to open the Serial console
@@ -81,22 +83,22 @@ void setup()
   }
 
   // Just to prove it works, call getDateTime to request the most recent Date/Time
-  Swarm_M138_DateTimeData_t dateTime;
-  Swarm_M138_Error_e err = mySwarm.getDateTime(&dateTime);
+  Swarm_M138_DateTimeData_t *dateTime = new Swarm_M138_DateTimeData_t; // Allocate memory for the Date/Time
+  Swarm_M138_Error_e err = mySwarm.getDateTime(dateTime);
   if (err == SWARM_M138_SUCCESS)
   {
     Serial.print(F("getDateTime returned: "));
-    Serial.print(dateTime.YYYY);
+    Serial.print(dateTime->YYYY);
     Serial.print(F("/"));
-    Serial.print(dateTime.MM);
+    Serial.print(dateTime->MM);
     Serial.print(F("/"));
-    Serial.print(dateTime.DD);
+    Serial.print(dateTime->DD);
     Serial.print(F(" "));
-    Serial.print(dateTime.hh);
+    Serial.print(dateTime->hh);
     Serial.print(F(":"));
-    Serial.print(dateTime.mm);
+    Serial.print(dateTime->mm);
     Serial.print(F(":"));
-    Serial.println(dateTime.ss);
+    Serial.println(dateTime->ss);
   }
   else
   {
@@ -105,6 +107,7 @@ void setup()
     Serial.print(F(" : "));
     Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
   }
+  delete dateTime; // Free the memory
 
   // Set up the callback for the Date/Time message. Call printDateTime when a new $DT message arrives
   mySwarm.setDateTimeCallback(&printDateTime);

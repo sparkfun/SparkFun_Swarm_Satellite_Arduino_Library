@@ -90,7 +90,8 @@
 #define SWARM_M138_MAX_PACKET_LENGTH_HEX 384 ///< The maximum packet length - encoded as ASCII Hex
 
 /** Minimum memory allocations for each message type */
-#define SWARM_M138_MEM_ALLOC_CS 38 // E.g. $CS DI=0x000e57,DN=Modem*10\n . Should be 28 but maybe Modem could be longer than 5 bytes?
+#define SWARM_M138_MEM_ALLOC_CS 30 // E.g. DI=0x001abe,DN=M138 . Should be 20 but maybe the modem model could be longer than 4 bytes?
+#define SWARM_M138_MEM_ALLOC_FV 37 // E.g. 2021-12-14T21:27:41,v1.5.0-rc4 . Should be 31 but maybe each v# could be three digits?
 
 /** Suported Commands */
 const char SWARM_M138_COMMAND_CONFIGURATION[] = "$CS";    ///< Configuration Settings

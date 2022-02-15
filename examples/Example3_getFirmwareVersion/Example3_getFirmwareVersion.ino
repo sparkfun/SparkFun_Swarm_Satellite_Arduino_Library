@@ -1,11 +1,11 @@
 /*!
- * @file Example1_getConfigurationSettings.ino
+ * @file Example3_getFirmwareVersion.ino
  * 
  * @mainpage SparkFun Swarm Satellite Arduino Library
  * 
  * @section intro_sec Examples
  * 
- * This example shows how to read the configuration settings (device ID and device name) from the modem.
+ * This example shows how to read the firmware version) from the modem.
  * 
  * Want to support open source hardware? Buy a board from SparkFun!
  * SparkX Swarm Serial Breakout : https://www.sparkfun.com/products/19236
@@ -15,7 +15,7 @@
  * This library was written by:
  * Paul Clark
  * SparkFun Electronics
- * January 2022
+ * February 2022
  * 
  * @section license License
  * 
@@ -47,14 +47,14 @@ void setup()
       ;
   }
 
-  char *configSettings = new char[SWARM_M138_MEM_ALLOC_CS]; // Create storage for the configuration settings
+  char *firmwareVersion = new char[SWARM_M138_MEM_ALLOC_FV]; // Create storage for the configuration settings
 
-  Swarm_M138_Error_e err = mySwarm.getConfigurationSettings(configSettings);
+  Swarm_M138_Error_e err = mySwarm.getFirmwareVersion(firmwareVersion);
   
   if (err == SWARM_M138_SUCCESS) // Get the settings
   {
-    Serial.print(F("The configuration settings are: "));
-    Serial.println(configSettings);
+    Serial.print(F("The firmware version is: "));
+    Serial.println(firmwareVersion);
   }
   else
   {
@@ -64,7 +64,7 @@ void setup()
     Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
   }
 
-  delete[] configSettings; // Free the storage
+  delete[] firmwareVersion; // Free the storage
 }
 
 void loop()
