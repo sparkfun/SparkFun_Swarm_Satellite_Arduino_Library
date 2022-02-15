@@ -40,6 +40,18 @@ SWARM_M138::SWARM_M138(int gpio1Pin)
   _checkUnsolicitedMsgReentrant = false;
   _swarmDateTimeCallback = NULL;
   _lastI2cCheck = millis();
+
+  _swarmDateTimeCallback = NULL;
+  _swarmGpsJammingCallback = NULL;
+  _swarmGeospatialCallback = NULL;
+  _swarmGpsFixQualityCallback = NULL;
+  _swarmPowerStatusCallback = NULL;
+  _swarmReceiveMessageCallback = NULL;
+  _swarmReceiveTestCallback = NULL;
+  _swarmSleepWakeCallback = NULL;
+  _swarmModemStatusCallback = NULL;
+  _swarmTransmitDataCallback = NULL;
+
 }
 
 #ifdef SWARM_M138_SOFTWARE_SERIAL_ENABLED
@@ -158,6 +170,15 @@ bool SWARM_M138::initializeBuffers()
     return false;
   }
   memset(_swarmBacklog, 0, _RxBuffSize);
+
+  commandError = new char[SWARM_M138_MAX_CMD_ERROR_LEN];
+  if (commandError == NULL)
+  {
+    if (_printDebug == true)
+      _debugPort->println(F("begin: not enough memory for commandError!"));
+    return false;
+  }
+  memset(commandError, 0, SWARM_M138_MAX_CMD_ERROR_LEN);
 
   return true;
 }
@@ -292,7 +313,7 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
     }
   }
 
-  free(event);
+  swarm_m138_free_char(event);
 
   _checkUnsolicitedMsgReentrant = false;
 
@@ -302,6 +323,58 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
 // Parse incoming unsolicited messages - pass the data to the user via the callbacks (if defined)
 bool SWARM_M138::processUnsolicitedEvent(const char *event)
 {
+  { // $DT - Date/Time
+    Swarm_M138_DateTimeData_t *dateTime = new Swarm_M138_DateTimeData_t;
+    char *eventStart;
+    char *eventEnd;
+
+    eventStart = strstr(event, "$DT ");
+    if (eventStart != NULL)
+    {
+      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+      if (eventEnd != NULL)
+      {
+        if (eventEnd >= (eventStart + 20)) // Check we have enough data
+        {
+          // Extract the Date, Time and flag
+          char c;
+          eventStart += 4; // Point at the first digit of the year
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = (uint16_t)(c - '0') * 1000; // Get the year
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 100);
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 10);
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 1);
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->MM = (uint8_t)(c - '0') * 10; // Get the month
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->MM = dateTime->MM + ((uint8_t)(c - '0') * 1);
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->DD = (uint8_t)(c - '0') * 10; // Get the day of month
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->DD = dateTime->DD + ((uint8_t)(c - '0') * 1);
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->hh = (uint8_t)(c - '0') * 10; // Get the hour
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->hh = dateTime->hh + ((uint8_t)(c - '0') * 1);
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->mm = (uint8_t)(c - '0') * 10; // Get the minute
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->mm = dateTime->mm + ((uint8_t)(c - '0') * 1);
+
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->ss = (uint8_t)(c - '0') * 10; // Get the second
+          c = *eventStart; eventStart++; if ((c >= '0') && (c <= '9')) dateTime->ss = dateTime->ss + ((uint8_t)(c - '0') * 1);
+
+          eventStart++;
+          dateTime->valid = *eventStart == 'V'; // Get the flag. Convert to bool
+
+          if (_swarmDateTimeCallback != NULL)
+          {
+            _swarmDateTimeCallback((const Swarm_M138_DateTimeData_t *)dateTime); // Call the callback
+          }
+
+          delete dateTime;
+          return (true);
+        }
+      }
+    }
+    delete dateTime;
+  }
   // { // URC: +UULOC (Localization information - CellLocate and hybrid positioning)
   //   ClockData clck;
   //   PositionData gps;
@@ -399,17 +472,17 @@ Swarm_M138_Error_e SWARM_M138::getConfigurationSettings(char *settings)
   Swarm_M138_Error_e err;
 
   // Allocate memory for the command, asterix, checksum bytes, \n and \0
-  command = swarm_m138_calloc_char(strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5);
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5);
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5); // Clear it
   sprintf(command, "%s*", SWARM_M138_COMMAND_CONFIGURATION); // Copy the command, add the asterix
   addChecksumLF(command); // Add the checksum bytes and line feed
 
-  response = swarm_m138_calloc_char(_RxBuffSize); // Allocate memory for the response
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
   if (response == NULL)
   {
-    free(command);
+    swarm_m138_free_char(command);
     return(SWARM_M138_ERROR_MEM_ALLOC);
   }
   memset(response, 0, _RxBuffSize); // Clear it
@@ -421,15 +494,15 @@ Swarm_M138_Error_e SWARM_M138::getConfigurationSettings(char *settings)
     responseStart = strstr(response, "$CS DI=0x");
     if (responseStart == NULL)
     {
-      free(command);
-      free(response);
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
     responseEnd = strchr(responseStart, '*'); // Stop at the asterix
     if (responseEnd == NULL)
     {
-      free(command);
-      free(response);
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
 
@@ -441,8 +514,8 @@ Swarm_M138_Error_e SWARM_M138::getConfigurationSettings(char *settings)
     settings[responseEnd - responseStart] = 0;
   }
 
-  free(command);
-  free(response);
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
   return (err);
 }
 
@@ -469,17 +542,17 @@ Swarm_M138_Error_e SWARM_M138::getDeviceID(uint32_t *id)
   uint32_t dev_ID = 0;
 
   // Allocate memory for the command, asterix, checksum bytes, \n and \0
-  command = swarm_m138_calloc_char(strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5);
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5);
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_CONFIGURATION) + 5); // Clear it
   sprintf(command, "%s*", SWARM_M138_COMMAND_CONFIGURATION); // Copy the command, add the asterix
   addChecksumLF(command); // Add the checksum bytes and line feed
 
-  response = swarm_m138_calloc_char(_RxBuffSize); // Allocate memory for the response
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
   if (response == NULL)
   {
-    free(command);
+    swarm_m138_free_char(command);
     return(SWARM_M138_ERROR_MEM_ALLOC);
   }
   memset(response, 0, _RxBuffSize); // Clear it
@@ -491,15 +564,15 @@ Swarm_M138_Error_e SWARM_M138::getDeviceID(uint32_t *id)
     responseStart = strstr(response, "$CS DI=0x");
     if (responseStart == NULL)
     {
-      free(command);
-      free(response);
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
     responseEnd = strchr(responseStart, ','); // Stop at the comma
     if (responseEnd == NULL)
     {
-      free(command);
-      free(response);
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
 
@@ -513,7 +586,7 @@ Swarm_M138_Error_e SWARM_M138::getDeviceID(uint32_t *id)
         dev_ID |= c - '0';
       else if ((c >= 'a') && (c <= 'f'))
         dev_ID |= c + 10 - 'a';
-      if ((c >= 'A') && (c <= 'F'))
+      else if ((c >= 'A') && (c <= 'F'))
         dev_ID |= c + 10 - 'A';
       responseStart++;
     }
@@ -527,65 +600,230 @@ Swarm_M138_Error_e SWARM_M138::getDeviceID(uint32_t *id)
     *id = dev_ID; // Copy the extracted ID into id
   }
 
-  free(command);
-  free(response);
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
   return (err);
 }
 
-// String SWARM_M138::clock(void)
-// {
-//   Swarm_M138_Error_e err;
-//   char *command;
-//   char *response;
-//   char *clockBegin;
-//   char *clockEnd;
+/**************************************************************************/
+/*!
+    @brief  Get the most recent $DT message
+    @param  dateTime
+            A pointer to a Swarm_M138_DateTimeData_t struct which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getDateTime(Swarm_M138_DateTimeData_t *dateTime)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd;
+  Swarm_M138_Error_e err;
 
-//   command = sara_r5_calloc_char(strlen(SWARM_M138_COMMAND_CLOCK) + 2);
-//   if (command == NULL)
-//     return "";
-//   sprintf(command, "%s?", SWARM_M138_COMMAND_CLOCK);
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 7); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_DATE_TIME_STAT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
 
-//   response = sara_r5_calloc_char(minimumResponseAllocation);
-//   if (response == NULL)
-//   {
-//     free(command);
-//     return "";
-//   }
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
 
-//   err = sendCommandWithResponse(command, SWARM_M138_RESPONSE_OK,
-//                                 response, SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
-//   if (err != SWARM_M138_ERROR_SUCCESS)
-//   {
-//     free(command);
-//     free(response);
-//     return "";
-//   }
+  err = sendCommandWithResponse(command, "$DT ", response, _RxBuffSize);
 
-//   // Response format: \r\n+CCLK: "YY/MM/DD,HH:MM:SS-TZ"\r\n\r\nOK\r\n
-//   clockBegin = strchr(response, '\"'); // Find first quote
-//   if (clockBegin == NULL)
-//   {
-//     free(command);
-//     free(response);
-//     return "";
-//   }
-//   clockBegin += 1;                     // Increment pointer to begin at first number
-//   clockEnd = strchr(clockBegin, '\"'); // Find last quote
-//   if (clockEnd == NULL)
-//   {
-//     free(command);
-//     free(response);
-//     return "";
-//   }
-//   *(clockEnd) = '\0'; // Set last quote to null char -- end string
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$DT ");
+    if (responseStart == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+    responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if (responseEnd == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
 
-//   String clock = String(clockBegin); // Extract the clock as a String _before_ freeing response
+    if (responseEnd < (responseStart + 20)) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
 
-//   free(command);
-//   free(response);
+    // Extract the Date, Time and flag
+    char c;
+    responseStart += 4; // Point at the first digit of the year
 
-//   return (clock);
-// }
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = (uint16_t)(c - '0') * 1000; // Get the year
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 100);
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 10);
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->YYYY = dateTime->YYYY + ((uint16_t)(c - '0') * 1);
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->MM = (uint8_t)(c - '0') * 10; // Get the month
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->MM = dateTime->MM + ((uint8_t)(c - '0') * 1);
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->DD = (uint8_t)(c - '0') * 10; // Get the day of month
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->DD = dateTime->DD + ((uint8_t)(c - '0') * 1);
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->hh = (uint8_t)(c - '0') * 10; // Get the hour
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->hh = dateTime->hh + ((uint8_t)(c - '0') * 1);
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->mm = (uint8_t)(c - '0') * 10; // Get the minute
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->mm = dateTime->mm + ((uint8_t)(c - '0') * 1);
+
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->ss = (uint8_t)(c - '0') * 10; // Get the second
+    c = *responseStart; responseStart++; if ((c >= '0') && (c <= '9')) dateTime->ss = dateTime->ss + ((uint8_t)(c - '0') * 1);
+
+    responseStart++;
+    dateTime->valid = *responseStart == 'V'; // Get the flag. Convert to bool
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query the current $DT rate
+    @param  rate
+            A pointer to a uint32_t which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getDateTimeRate(uint32_t *rate)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 7); // Clear it
+  sprintf(command, "%s ?*", SWARM_M138_COMMAND_DATE_TIME_STAT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$DT ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$DT ");
+    if (responseStart == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+    responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if (responseEnd == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the rate
+    char c;
+    uint32_t theRate = 0;
+    responseStart += 4; // Point at the first digit of the rate
+
+    c = *responseStart; // Get the first digit of the rate
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
+      {
+        theRate = theRate * 10;
+        theRate += (uint32_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the rate
+    }
+
+    *rate = theRate;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+
+/**************************************************************************/
+/*!
+    @brief  Set the rate of $DT Date/Time messages
+    @param  rate
+            The interval between messages
+            0 == Disable. Max is 2147483647 (2^31 - 1)
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_RATE if the rate is invalid
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setDateTimeRate(uint32_t rate)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Check rate is within bounds
+  if (rate > SWARM_M138_MAX_MESSAGE_RATE)
+    return (SWARM_M138_ERROR_INVALID_RATE);
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 1 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 1 + 10 + 5); // Clear it
+  sprintf(command, "%s %u*", SWARM_M138_COMMAND_DATE_TIME_STAT, rate); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$DT OK*", "$DT ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
 
 /**************************************************************************/
 /*!
@@ -666,73 +904,61 @@ const char *SWARM_M138::modemErrorString(Swarm_M138_Error_e error)
     case SWARM_M138_ERROR_TIMEOUT:
       return "Communication timeout";
       break;
+    case SWARM_M138_ERROR_INVALID_FORMAT:
+      return "Indicates the command response format was invalid: missing $ or *; non-ASCII checksum";
+      break;
     case SWARM_M138_ERROR_INVALID_CHECKSUM:
       return "Indicates the command response checksum was invalid";
+      break;
+    case SWARM_M138_ERROR_INVALID_RATE:
+      return "The requested message rate was invalid";
       break;
     case SWARM_M138_ERROR_ERR:
       return "Command input error (ERR)";
       break;
-    case SWARM_M138_ERROR_MM_BADPARAM:
-      return "Messages Received Management : invalid command or argument";
-      break;
-    case SWARM_M138_ERROR_MM_DBXINVMSGID:
-      return "Messages Received Management : invalid message ID";
-      break;
-    case SWARM_M138_ERROR_MM_DBXNOMORE:
-      return "Messages Received Management : no messages found";
-      break;
-    case SWARM_M138_ERROR_MT_BADPARAM:
-      return "Messages To Transmit Management : invalid command or argument";
-      break;
-    case SWARM_M138_ERROR_MT_DBXINVMSGID:
-      return "Messages To Transmit Management : invalid message ID";
-      break;
-    case SWARM_M138_ERROR_MT_DBXNOMORE:
-      return "Messages To Transmit Management : no messages found";
-      break;
-    case SWARM_M138_ERROR_SL_TIMENOTSET:
-      return "Sleep Mode : time not yet set from GPS";
-      break;
-    case SWARM_M138_ERROR_SL_BADPARAM:
-      return "Sleep Mode : invalid seconds / dateTime";
-      break;
-    case SWARM_M138_ERROR_SL_NOCOMMAND:
-      return "Sleep Mode : No S or U partameter";
-      break;
-    case SWARM_M138_ERROR_SL_NOTIME:
-      return "Sleep Mode : attempt to sleep before time is set";
-      break;
-    case SWARM_M138_ERROR_TD_BADAPPID:
-      return "Transmit Data : invalid application ID";
-      break;
-    case SWARM_M138_ERROR_TD_BADDATA:
-      return "Transmit Data : Message has odd number or non-hex characters when sending data as hexadecimal";
-      break;
-    case SWARM_M138_ERROR_TD_BADEXPIRETIME:
-      return "Transmit Data : Invalid hold time";
-      break;
-    case SWARM_M138_ERROR_TD_ERR:
-      return "Transmit Data : Unspecified error";
-      break;
-    case SWARM_M138_ERROR_TD_HOLDTIMEEXPIRED:
-      return "Transmit Data : Unable to send within requested hold time";
-      break;
-    case SWARM_M138_ERROR_TD_NODEVICEID:
-      return "Transmit Data : The Swarm device ID has not yet been set - contact Swarm Support";
-      break;
-    case SWARM_M138_ERROR_TD_NOSPACE:
-      return "Transmit Data : No space for message";
-      break;
-    case SWARM_M138_ERROR_TD_TIMENOTSET:
-      return "Transmit Data : Attempt to send message before time set by GPS";
-      break;
-    case SWARM_M138_ERROR_TD_DBXTOHIVEFULL:
-      return "Transmit Data : Queue for queued messages is full. Maximum of 2048 messages may be held in the queue.";
-      break;
-    case SWARM_M138_ERROR_TD_TOOLONG:
-      return "Transmit Data : Message is too large to send";
-      break;
   }
+
+  return "UNKNOWN";
+}
+
+/**************************************************************************/
+/*!
+    @brief  Convert command error into a printable description
+    @param  ERR
+            The commad error as const char *
+    @return A pointer to the command error description in string (const char) format
+*/
+/**************************************************************************/
+const char *SWARM_M138::commandErrorString(const char *ERR)
+{
+  if (strstr(ERR, "BADPARAM") != NULL)
+    return "Invalid command or argument";
+  if (strstr(ERR, "DBXINVMSGID") != NULL)
+    return "Messages Management : invalid message ID";
+  if (strstr(ERR, "DBXNOMORE") != NULL)
+    return "Messages Management : no messages found";
+  if (strstr(ERR, "TIMENOTSET") != NULL)
+    return "Time not yet set from GPS";
+  if (strstr(ERR, "NOCOMMAND") != NULL)
+    return "Sleep Mode : No S or U partameter";
+  if (strstr(ERR, "NOTIME") != NULL)
+    return "Sleep Mode : attempt to sleep before time is set";
+  if (strstr(ERR, "BADAPPID") != NULL)
+    return "Transmit Data : invalid application ID";
+  if (strstr(ERR, "BADDATA") != NULL)
+    return "Transmit Data : Message has odd number or non-hex characters when sending data as hexadecimal";
+  if (strstr(ERR, "BADEXPIRETIME") != NULL)
+    return "Transmit Data : Invalid hold time";
+  if (strstr(ERR, "HOLDTIMEEXPIRED") != NULL)
+    return "Transmit Data : Unable to send within requested hold time";
+  if (strstr(ERR, "NODEVICEID") != NULL)
+    return "Transmit Data : The Swarm device ID has not yet been set - contact Swarm Support";
+  if (strstr(ERR, "NOSPACE") != NULL)
+    return "Transmit Data : No space for message";
+  if (strstr(ERR, "DBXTOHIVEFULL") != NULL)
+    return "Transmit Data : Queue for queued messages is full. Maximum of 2048 messages may be held in the queue";
+  if (strstr(ERR, "TOOLONG") != NULL)
+    return "Transmit Data : Message is too large to send";
 
   return "UNKNOWN";
 }
@@ -749,7 +975,7 @@ void SWARM_M138::addChecksumLF(char *command)
   if (dollar == NULL) // Return now if the $ was not found
     return;
 
-  char *asterix = strchr(command, '*'); // Find the *
+  char *asterix = strchr(dollar, '*'); // Find the *
 
   if (asterix == NULL) // Return now if the * was not found
     return;
@@ -779,6 +1005,110 @@ void SWARM_M138::addChecksumLF(char *command)
   *(asterix + 4) = 0;
 }
 
+// Check if the response / message checksum is valid
+Swarm_M138_Error_e SWARM_M138::checkChecksum(char *startPosition)
+{
+  char *dollar = strchr(startPosition, '$'); // Find the $
+
+  if (dollar == NULL) // Return now if the $ was not found
+  {
+    if (_printDebug == true)
+    {
+      _debugPort->println(F("checkChecksum: $ not found!"));
+    }
+    return (SWARM_M138_ERROR_INVALID_FORMAT);
+  }
+
+  char *asterix = strchr(dollar, '*'); // Find the *
+
+  if (asterix == NULL) // Return now if the * was not found
+  {
+    if (_printDebug == true)
+    {
+      _debugPort->println(F("checkChecksum: * not found!"));
+    }
+    return (SWARM_M138_ERROR_INVALID_FORMAT);
+  }
+
+  char checksum = 0;
+
+  dollar++; // Point to the char after the $
+
+  while (dollar < asterix) // Calculate the checksum
+  {
+    checksum ^= *dollar;
+    dollar++;
+  }
+
+  char expectedChecksum;
+
+  char checksumChar = *(asterix + 1); // Get the first checksum character
+
+  if ((checksumChar >= '0') && (checksumChar <= '9')) // Convert to binary
+    expectedChecksum = (checksumChar - '0') << 4;
+  else if ((checksumChar >= 'a') && (checksumChar <= 'f'))
+    expectedChecksum = (checksumChar + 10 - 'a') << 4;
+  else if ((checksumChar >= 'A') && (checksumChar <= 'F'))
+    expectedChecksum = (checksumChar + 10 - 'A') << 4;
+  else
+  {
+    if (_printDebug == true)
+    {
+      _debugPort->println(F("checkChecksum: invalid checksum char 1"));
+    }
+    return (SWARM_M138_ERROR_INVALID_FORMAT);
+  }
+
+  checksumChar = *(asterix + 2); // Get the second checksum character
+
+  if ((checksumChar >= '0') && (checksumChar <= '9')) // Convert to binary
+    expectedChecksum |= (checksumChar - '0');
+  else if ((checksumChar >= 'a') && (checksumChar <= 'f'))
+    expectedChecksum |= (checksumChar + 10 - 'a');
+  else if ((checksumChar >= 'A') && (checksumChar <= 'F'))
+    expectedChecksum |= (checksumChar + 10 - 'A');
+  else
+    return (SWARM_M138_ERROR_INVALID_FORMAT);
+
+  if (checksum != expectedChecksum)
+  {
+    if (_printDebug == true)
+    {
+      _debugPort->println(F("checkChecksum: invalid checksum char 2"));
+    }
+    return (SWARM_M138_ERROR_INVALID_CHECKSUM);
+  }
+
+  return (SWARM_M138_ERROR_SUCCESS);
+}
+
+// Extract the command error
+Swarm_M138_Error_e SWARM_M138::extractCommandError(char *startPosition)
+{
+    memset(commandError, 0, SWARM_M138_MAX_CMD_ERROR_LEN); // Clear any existing error
+
+    char *errorAt = strstr(startPosition, "ERR,"); // Find the ERR,
+
+    if (errorAt == NULL)
+      return (SWARM_M138_ERROR_ERROR);
+
+    errorAt += 4; // Point to the start of the actual error message
+
+    char *asterix = strchr(errorAt, '*'); // Find the *
+
+    if (asterix == NULL)
+      return (SWARM_M138_ERROR_ERROR);
+
+    int errorLen = 0;
+    while ((errorAt < asterix) && (errorLen < (SWARM_M138_MAX_CMD_ERROR_LEN - 1))) // Leave a NULL on the end
+    {
+      commandError[errorLen] = *errorAt;
+      errorAt++;
+      errorLen++;
+    }
+
+    return (SWARM_M138_ERROR_SUCCESS);
+}
 
 // Send a command. Check for a response.
 // Return true if expectedResponseStart is seen in the data followed by a \n
@@ -790,6 +1120,7 @@ Swarm_M138_Error_e SWARM_M138::sendCommandWithResponse(
   bool responseStartSeen = false;
   int index = 0;
   int destIndex = 0;
+  size_t responseStartedAt = 0;
 
   bool printedSomething = false;
 
@@ -827,6 +1158,8 @@ Swarm_M138_Error_e SWARM_M138::sendCommandWithResponse(
           char c = responseDest[chrPtr]; // Check each character
           if (c == expectedResponseStart[index])
           {
+            if ((index == 0)  && (responseStartSeen == false))
+              responseStartedAt = chrPtr; // Record where the (possible) response started
             if (++index == (int)strlen(expectedResponseStart))
             {
               responseStartSeen = true;
@@ -883,9 +1216,9 @@ Swarm_M138_Error_e SWARM_M138::sendCommandWithResponse(
 
   pruneBacklog(); // Prune any incoming non-actionable URC's and responses/errors from the backlog
 
-  if (found)
+  if (found) // Check the NMEA checksum is valid
   {
-    return SWARM_M138_ERROR_SUCCESS;
+    return (checkChecksum((char *)&responseDest[responseStartedAt]));
   }
 
   return SWARM_M138_ERROR_TIMEOUT;
@@ -910,15 +1243,24 @@ void SWARM_M138::sendCommand(const char *command)
     }
   }
 
+  if (_printDebug == true)
+  {
+    _debugPort->print(F("sendCommand: Command: "));
+    _debugPort->println(command);
+  }
+
   //Now send the command
   hwPrint(command);
 }
 
-Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponse, const char *expectedError, unsigned long timeout)
+Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart, unsigned long timeout)
 {
   unsigned long timeIn;
   bool found = false;
+  bool responseStartSeen = false, errorStartSeen = false;
   int responseIndex = 0, errorIndex = 0;
+  size_t responseStartedAt = 0, errorStartedAt = 0;
+  Swarm_M138_Error_e err = SWARM_M138_ERROR_ERROR;
 
   bool printedSomething = false;
 
@@ -954,24 +1296,30 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponse, con
         for (size_t chrPtr = backlogLength; chrPtr < (backlogLength + hwAvail); chrPtr++)
         {
           char c = _swarmBacklog[chrPtr]; // Check each character
-          if (c == expectedResponse[responseIndex])
+
+          if (c == expectedResponseStart[responseIndex])
           {
-            if (++responseIndex == (int)strlen(expectedResponse))
+            if ((responseIndex == 0) && (responseStartSeen == false))
+              responseStartedAt = chrPtr; // Record where the (possible) response started
+            if (++responseIndex == (int)strlen(expectedResponseStart))
             {
-              found = true;
+              responseStartSeen = true;
             }
           }
           else
           {
             responseIndex = 0;
           }
-          if (expectedError != NULL)
+
+          if (expectedErrorStart != NULL)
           {
-            if (c == expectedError[errorIndex])
+            if (c == expectedErrorStart[errorIndex])
             {
-              if (++errorIndex == (int)strlen(expectedError))
+              if ((errorIndex == 0) && (errorStartSeen == false))
+                errorStartedAt = chrPtr; // Record where the (possible) error started
+              if (++errorIndex == (int)strlen(expectedErrorStart))
               {
-                found = true;
+                errorStartSeen = true;
               }
             }
             else
@@ -979,6 +1327,9 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponse, con
               errorIndex = 0;
             }
           }
+
+          if ((responseStartSeen || errorStartSeen) && (c == '\n'))
+            found = true;
         }
       }
       else
@@ -1000,71 +1351,39 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponse, con
     if (printedSomething)
       _debugPort->println();
 
-  pruneBacklog(); // Prune any incoming non-actionable URC's and responses/errors from the backlog
-
   if (found == true)
   {
-    if (responseIndex > 0) // Let success have priority
+    if (responseStartSeen) // Let success have priority
     {
-      return SWARM_M138_ERROR_SUCCESS;
+      if (_printDebug == true)
+      {
+        _debugPort->print(F("waitForResponse: responseStart: "));
+        _debugPort->println((char *)&_swarmBacklog[responseStartedAt]);
+      }
+      err = checkChecksum((char *)&_swarmBacklog[responseStartedAt]);
     }
-    else if (errorIndex > 0)
+    else if (errorStartSeen)
     {
-      return SWARM_M138_ERROR_ERROR;
+      if (_printDebug == true)
+      {
+        _debugPort->print(F("waitForResponse: errorStart: "));
+        _debugPort->println((char *)&_swarmBacklog[errorStartedAt]);
+      }
+      err = checkChecksum((char *)&_swarmBacklog[errorStartedAt]);
+      if (err == SWARM_M138_ERROR_SUCCESS)
+      {
+        extractCommandError((char *)&_swarmBacklog[errorStartedAt]);
+        err = SWARM_M138_ERROR_ERR;
+      }
     }
   }
+  else
+    err = SWARM_M138_ERROR_TIMEOUT;
 
-  return SWARM_M138_ERROR_TIMEOUT;
+  pruneBacklog(); // Prune any incoming non-actionable URC's and responses/errors from the backlog
+
+  return (err);
 }
-
-// Swarm_M138_Error_e SWARM_M138::parseSocketReadIndication(int socket, int length)
-// {
-//   Swarm_M138_Error_e err;
-//   char *readDest;
-
-//   if ((socket < 0) || (length < 0))
-//   {
-//     return SWARM_M138_ERROR_UNEXPECTED_RESPONSE;
-//   }
-
-//   // Return now if both callbacks pointers are NULL - otherwise the data will be read and lost!
-//   if ((_socketReadCallback == NULL) && (_socketReadCallbackPlus == NULL))
-//     return SWARM_M138_ERROR_INVALID;
-
-//   readDest = sara_r5_calloc_char(length + 1);
-//   if (readDest == NULL)
-//     return SWARM_M138_ERROR_OUT_OF_MEMORY;
-
-//   int bytesRead;
-//   err = socketRead(socket, length, readDest, &bytesRead);
-//   if (err != SWARM_M138_ERROR_SUCCESS)
-//   {
-//     free(readDest);
-//     return err;
-//   }
-
-//   if (_socketReadCallback != NULL)
-//   {
-//     String dataAsString = ""; // Create an empty string
-//     // Copy the data from readDest into the String in a binary-compatible way
-//     // Important Note: some implementations of concat, like the one on ESP32, are binary-compatible.
-//     // But some, like SAMD, are not. They use strlen or strcpy internally - which don't like \0's.
-//     // The only true binary-compatible solution is to use socketReadCallbackPlus...
-//     for (int i = 0; i < bytesRead; i++)
-//       dataAsString.concat(readDest[i]);
-//     _socketReadCallback(socket, dataAsString);
-//   }
-
-//   if (_socketReadCallbackPlus != NULL)
-//   {
-//     IPAddress dummyAddress = { 0, 0, 0, 0 };
-//     int dummyPort = 0;
-//     _socketReadCallbackPlus(socket, (const char *)readDest, bytesRead, dummyAddress, dummyPort);
-//   }
-
-//   free(readDest);
-//   return SWARM_M138_ERROR_SUCCESS;
-// }
 
 size_t SWARM_M138::hwPrint(const char *s)
 {
@@ -1310,9 +1629,13 @@ void SWARM_M138::beginSerial(unsigned long baud)
 }
 
 // Allocate memory
-char *SWARM_M138::swarm_m138_calloc_char(size_t num)
+char *SWARM_M138::swarm_m138_alloc_char(size_t num)
 {
-  return (char *)calloc(num, sizeof(char));
+  return ((char *)new char[num]);
+}
+void SWARM_M138::swarm_m138_free_char(char *freeMe)
+{
+  delete[] freeMe;
 }
 
 //This prunes the backlog of non-actionable events. If new actionable events are added, you must modify the if statement.
@@ -1328,15 +1651,16 @@ void SWARM_M138::pruneBacklog()
   while (event != NULL) //If event is actionable, add it to pruneBuffer.
   {
     // These are the events we want to keep so they can be processed by poll / checkUnsolicitedMsg
-    if ((strstr(event, "+UUSORD:") != NULL)
-        || (strstr(event, "+UUSORF:") != NULL)
-        || (strstr(event, "+UUSOLI:") != NULL)
-        || (strstr(event, "+UUSOCL:") != NULL)
-        || (strstr(event, "+UULOC:") != NULL)
-        || (strstr(event, "+UUSIMSTAT:") != NULL)
-        || (strstr(event, "+UUPSDA:") != NULL)
-        || (strstr(event, "+UUPING:") != NULL)
-        || (strstr(event, "+UUHTTPCR:") != NULL))
+    if ((strstr(event, "$DT ") != NULL)
+        || (strstr(event, "$GJ ") != NULL)
+        || (strstr(event, "$GN ") != NULL)
+        || (strstr(event, "$GS ") != NULL)
+        || (strstr(event, "$PW ") != NULL)
+        || (strstr(event, "$RD ") != NULL)
+        || (strstr(event, "$RT ") != NULL)
+        || (strstr(event, "$SL ") != NULL)
+        || (strstr(event, "$M138 ") != NULL)
+        || (strstr(event, "$TD ") != NULL))
     {
       strcat(_pruneBuffer, event); // The URCs are all readable text so using strcat is OK
       strcat(_pruneBuffer, "\n"); // strtok blows away delimiter, but we want that for later.
@@ -1348,217 +1672,5 @@ void SWARM_M138::pruneBacklog()
   memset(_swarmBacklog, 0, _RxBuffSize); //Clear out backlog buffer.
   memcpy(_swarmBacklog, _pruneBuffer, strlen(_pruneBuffer)); //Copy the pruned buffer back into the backlog
 
-  free(event);
+  swarm_m138_free_char(event);
 }
-
-// // GPS Helper Functions:
-
-// // Read a source string until a delimiter is hit, store the result in destination
-// char *SWARM_M138::readDataUntil(char *destination, unsigned int destSize,
-//                              char *source, char delimiter)
-// {
-
-//   char *strEnd;
-//   size_t len;
-
-//   strEnd = strchr(source, delimiter);
-
-//   if (strEnd != NULL)
-//   {
-//     len = strEnd - source;
-//     memset(destination, 0, destSize);
-//     memcpy(destination, source, len);
-//   }
-
-//   return strEnd;
-// }
-
-// bool SWARM_M138::parseGPRMCString(char *rmcString, PositionData *pos,
-//                                ClockData *clk, SpeedData *spd)
-// {
-//   char *ptr, *search;
-//   unsigned long tTemp;
-//   char tempData[TEMP_NMEA_DATA_SIZE];
-
-//   // if (_printDebug == true)
-//   // {
-//   //   _debugPort->println(F("parseGPRMCString: rmcString: "));
-//   //   _debugPort->println(rmcString);
-//   // }
-
-//   // Fast-forward test to first value:
-//   ptr = strchr(rmcString, ',');
-//   ptr++; // Move ptr past first comma
-
-//   // If the next character is another comma, there's no time data
-//   // Find time:
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   // Next comma should be present and not the next position
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     pos->utc = atof(tempData);                             // Extract hhmmss.ss as float
-//     tTemp = pos->utc;                                      // Convert to unsigned long (discard the digits beyond the decimal point)
-//     clk->time.ms = ((unsigned int)(pos->utc * 100)) % 100; // Extract the milliseconds
-//     clk->time.hour = tTemp / 10000;
-//     tTemp -= ((unsigned long)clk->time.hour * 10000);
-//     clk->time.minute = tTemp / 100;
-//     tTemp -= ((unsigned long)clk->time.minute * 100);
-//     clk->time.second = tTemp;
-//   }
-//   else
-//   {
-//     pos->utc = 0.0;
-//     clk->time.hour = 0;
-//     clk->time.minute = 0;
-//     clk->time.second = 0;
-//   }
-//   ptr = search + 1; // Move pointer to next value
-
-//   // Find status character:
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   // Should be a single character: V = Data invalid, A = Data valid
-//   if ((search != NULL) && (search == ptr + 1))
-//   {
-//     pos->status = *ptr; // Assign char at ptr to status
-//   }
-//   else
-//   {
-//     pos->status = 'X'; // Made up very bad status
-//   }
-//   ptr = search + 1;
-
-//   // Find latitude:
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     pos->lat = atof(tempData);              // Extract ddmm.mmmmm as float
-//     unsigned long lat_deg = pos->lat / 100; // Extract the degrees
-//     pos->lat -= (float)lat_deg * 100.0;     // Subtract the degrees leaving only the minutes
-//     pos->lat /= 60.0;                       // Convert minutes into degrees
-//     pos->lat += (float)lat_deg;             // Finally add the degrees back on again
-//   }
-//   else
-//   {
-//     pos->lat = 0.0;
-//   }
-//   ptr = search + 1;
-
-//   // Find latitude hemishpere
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search == ptr + 1))
-//   {
-//     if (*ptr == 'S')    // Is the latitude South
-//       pos->lat *= -1.0; // Make lat negative
-//   }
-//   ptr = search + 1;
-
-//   // Find longitude:
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     pos->lon = atof(tempData);              // Extract dddmm.mmmmm as float
-//     unsigned long lon_deg = pos->lon / 100; // Extract the degrees
-//     pos->lon -= (float)lon_deg * 100.0;     // Subtract the degrees leaving only the minutes
-//     pos->lon /= 60.0;                       // Convert minutes into degrees
-//     pos->lon += (float)lon_deg;             // Finally add the degrees back on again
-//   }
-//   else
-//   {
-//     pos->lon = 0.0;
-//   }
-//   ptr = search + 1;
-
-//   // Find longitude hemishpere
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search == ptr + 1))
-//   {
-//     if (*ptr == 'W')    // Is the longitude West
-//       pos->lon *= -1.0; // Make lon negative
-//   }
-//   ptr = search + 1;
-
-//   // Find speed
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     spd->speed = atof(tempData); // Extract speed over ground in knots
-//     spd->speed *= 0.514444;      // Convert to m/s
-//   }
-//   else
-//   {
-//     spd->speed = 0.0;
-//   }
-//   ptr = search + 1;
-
-//   // Find course over ground
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     spd->cog = atof(tempData);
-//   }
-//   else
-//   {
-//     spd->cog = 0.0;
-//   }
-//   ptr = search + 1;
-
-//   // Find date
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     tTemp = atol(tempData);
-//     clk->date.day = tTemp / 10000;
-//     tTemp -= ((unsigned long)clk->date.day * 10000);
-//     clk->date.month = tTemp / 100;
-//     tTemp -= ((unsigned long)clk->date.month * 100);
-//     clk->date.year = tTemp;
-//   }
-//   else
-//   {
-//     clk->date.day = 0;
-//     clk->date.month = 0;
-//     clk->date.year = 0;
-//   }
-//   ptr = search + 1;
-
-//   // Find magnetic variation in degrees:
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search != ptr))
-//   {
-//     spd->magVar = atof(tempData);
-//   }
-//   else
-//   {
-//     spd->magVar = 0.0;
-//   }
-//   ptr = search + 1;
-
-//   // Find magnetic variation direction
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, ',');
-//   if ((search != NULL) && (search == ptr + 1))
-//   {
-//     if (*ptr == 'W')       // Is the magnetic variation West
-//       spd->magVar *= -1.0; // Make magnetic variation negative
-//   }
-//   ptr = search + 1;
-
-//   // Find position system mode
-//   // Possible values for posMode: N = No fix, E = Estimated/Dead reckoning fix, A = Autonomous GNSS fix,
-//   //                              D = Differential GNSS fix, F = RTK float, R = RTK fixed
-//   search = readDataUntil(tempData, TEMP_NMEA_DATA_SIZE, ptr, '*');
-//   if ((search != NULL) && (search = ptr + 1))
-//   {
-//     pos->mode = *ptr;
-//   }
-//   else
-//   {
-//     pos->mode = 'X';
-//   }
-//   ptr = search + 1;
-
-//   if (pos->status == 'A')
-//   {
-//     return true;
-//   }
-//   return false;
-// }

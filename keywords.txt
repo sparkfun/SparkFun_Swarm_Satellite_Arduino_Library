@@ -105,8 +105,12 @@ setModemStatusCallback	KEYWORD2
 setTransmitDataCallback	KEYWORD2
 
 modemStatusString	KEYWORD2
+modemErrorString	KEYWORD2
+commandErrorString	KEYWORD2
 
 write	KEYWORD2
+
+commandError	KEYWORD2
 
 #######################################
 # Constants 	LITERAL1

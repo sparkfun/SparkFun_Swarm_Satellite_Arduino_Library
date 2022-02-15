@@ -118,30 +118,15 @@ typedef enum
   SWARM_M138_ERROR_SUCCESS,             ///< Hey, it worked!
   SWARM_M138_ERROR_MEM_ALLOC,           ///< Memory allocation error
   SWARM_M138_ERROR_TIMEOUT,             ///< Communication timeout
+  SWARM_M138_ERROR_INVALID_FORMAT,      ///< Indicates the command response format was invalid
   SWARM_M138_ERROR_INVALID_CHECKSUM,    ///< Indicates the command response checksum was invalid
-  SWARM_M138_ERROR_ERR,                 ///< Command input error (ERR)
-  SWARM_M138_ERROR_MM_BADPARAM,         ///< Messages Received Management : invalid command or argument
-  SWARM_M138_ERROR_MM_DBXINVMSGID,      ///< Messages Received Management : invalid message ID
-  SWARM_M138_ERROR_MM_DBXNOMORE,        ///< Messages Received Management : no messages found
-  SWARM_M138_ERROR_MT_BADPARAM,         ///< Messages To Transmit Management : invalid command or argument
-  SWARM_M138_ERROR_MT_DBXINVMSGID,      ///< Messages To Transmit Management : invalid message ID
-  SWARM_M138_ERROR_MT_DBXNOMORE,        ///< Messages To Transmit Management : no messages found
-  SWARM_M138_ERROR_SL_TIMENOTSET,       ///< Sleep Mode : time not yet set from GPS
-  SWARM_M138_ERROR_SL_BADPARAM,         ///< Sleep Mode : invalid seconds / dateTime
-  SWARM_M138_ERROR_SL_NOCOMMAND,        ///< Sleep Mode : No S or U partameter
-  SWARM_M138_ERROR_SL_NOTIME,           ///< Sleep Mode : attempt to sleep before time is set
-  SWARM_M138_ERROR_TD_BADAPPID,         ///< Transmit Data : invalid application ID
-  SWARM_M138_ERROR_TD_BADDATA,          ///< Transmit Data : Message has odd number or non-hex characters when sending data as hexadecimal
-  SWARM_M138_ERROR_TD_BADEXPIRETIME,    ///< Transmit Data : Invalid hold time
-  SWARM_M138_ERROR_TD_ERR,              ///< Transmit Data : Unspecified error
-  SWARM_M138_ERROR_TD_HOLDTIMEEXPIRED,  ///< Transmit Data : Unable to send within requested hold time
-  SWARM_M138_ERROR_TD_NODEVICEID,       ///< Transmit Data : The Swarm device ID has not yet been set - contact Swarm Support
-  SWARM_M138_ERROR_TD_NOSPACE,          ///< Transmit Data : No space for message
-  SWARM_M138_ERROR_TD_TIMENOTSET,       ///< Transmit Data : Attempt to send message before time set by GPS
-  SWARM_M138_ERROR_TD_DBXTOHIVEFULL,    ///< Transmit Data : Queue for queued messages is full. Maximum of 2048 messages may be held in the queue.
-  SWARM_M138_ERROR_TD_TOOLONG           ///< Transmit Data : Message is too large to send  
+  SWARM_M138_ERROR_INVALID_RATE,        ///< Indicates the message rate was invalid
+  SWARM_M138_ERROR_ERR                  ///< Command input error (ERR) - the error is copied into commandError
 } Swarm_M138_Error_e;
 #define SWARM_M138_SUCCESS SWARM_M138_ERROR_SUCCESS ///< Hey, it worked!
+
+/** Define the maximum message 'rate' (interval) */
+const uint32_t SWARM_M138_MAX_MESSAGE_RATE = 0x7FFFFFFF; ///< 2147483647 (2^31 - 1)
 
 /** A struct to hold the date and time returned by $DT */
 typedef struct
@@ -382,6 +367,11 @@ public:
   /** Convert modem status enum etc. into printable text */
   const char *modemStatusString(Swarm_M138_Modem_Status_e status);
   const char *modemErrorString(Swarm_M138_Error_e error);
+  const char *commandErrorString(const char *ERR);
+
+  /** Storage for the most recent command error */
+  #define SWARM_M138_MAX_CMD_ERROR_LEN 32 ///< Allocate 32 bytes to store the most recent command error
+  char *commandError;
 
 private:
   HardwareSerial *_hardSerial;
@@ -419,6 +409,12 @@ private:
   // Add the two NMEA checksum bytes and line feed to a command
   void addChecksumLF(char *command);
 
+  // Check if the response / message format and checksum is valid
+  Swarm_M138_Error_e checkChecksum(char *startPosition);
+
+  // Extract the error from the command response
+  Swarm_M138_Error_e extractCommandError(char *startPosition);
+
   // Send command with the start of an expected response 
   Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponseStart, char *responseDest,
                                              int destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
@@ -427,7 +423,7 @@ private:
   void sendCommand(const char *command);
 
   // Wait for an expected response or error (don't send a command)
-  Swarm_M138_Error_e waitForResponse(const char *expectedResponse, const char *expectedError, unsigned long timeout);
+  Swarm_M138_Error_e waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart, unsigned long timeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
 
   bool initializeBuffers(void);
   bool processUnsolicitedEvent(const char *event);
@@ -452,7 +448,8 @@ private:
 
   // Memory allocation
 
-  char *swarm_m138_calloc_char(size_t num);
+  char *swarm_m138_alloc_char(size_t num);
+  void swarm_m138_free_char(char *freeMe);
 
   // GPS Helper functions
   //char *readDataUntil(char *destination, unsigned int destSize, char *source, char delimiter);

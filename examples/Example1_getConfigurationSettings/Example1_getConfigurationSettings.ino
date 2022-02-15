@@ -45,9 +45,9 @@ void setup()
       ;
   }
 
-  char configSettings[SWARM_M138_MEM_ALLOC_CS]; // Create storage for the configuration settings
+  char *configSettings = new char[SWARM_M138_MEM_ALLOC_CS]; // Create storage for the configuration settings
 
-  Swarm_M138_Error_e err = mySwarm.getConfigurationSettings((char *)configSettings);
+  Swarm_M138_Error_e err = mySwarm.getConfigurationSettings(configSettings);
   
   if (err == SWARM_M138_SUCCESS) // Get the settings
   {
@@ -61,6 +61,8 @@ void setup()
     Serial.print(F(" : "));
     Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
   }
+
+  delete[] configSettings; // Free the storage
 }
 
 void loop()
