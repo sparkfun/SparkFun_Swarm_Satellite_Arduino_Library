@@ -528,6 +528,79 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
     }
     delete powerStatus;
   }
+  { // $RT - Receive Test
+    Swarm_M138_Receive_Test_t *rxTest = new Swarm_M138_Receive_Test_t;
+    char *eventStart;
+    char *eventEnd;
+
+    eventStart = strstr(event, "$RT ");
+    if (eventStart != NULL)
+    {
+      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+      if (eventEnd != NULL)
+      {
+        if (eventEnd >= (eventStart + 9)) // Check we have enough data
+        {
+          // Extract the receive test info
+          int rssi_bg = 0, rssi_sat = 0, snr = 0, fdev = 0;
+          int YYYY = 0, MM = 0, DD = 0, hh = 0, mm = 0, ss = 0;
+          uint32_t sat_ID = 0;
+
+          int ret = sscanf(eventStart, "$RT RSSI=%d,SNR=%d,FDEV=%d,TS=%d-%d-%dT%d:%d:%d,DI=0x",
+                          &rssi_sat, &snr, &fdev, &YYYY, &MM, &DD, &hh, &mm, &ss);
+
+          if (ret == 9)
+          {
+            eventStart = strstr(eventStart, "DI=0x"); // Find the start of the satellite ID
+
+            // Extract the ID
+            eventStart += 5; // Point at the first digit
+            while (eventStart < eventEnd)
+            {
+              sat_ID <<= 4; // Shuffle the existing value along by 4 bits
+              char c = *eventStart; // Get the digit
+              if ((c >= '0') && (c <= '9'))
+                sat_ID |= c - '0';
+              else if ((c >= 'a') && (c <= 'f'))
+                sat_ID |= c + 10 - 'a';
+              else if ((c >= 'A') && (c <= 'F'))
+                sat_ID |= c + 10 - 'A';
+              eventStart++;
+            }
+          }
+          else // Try to extract just rssi_background
+          {
+            ret = sscanf(eventStart, "$RT RSSI=%d*", &rssi_bg);
+          }
+
+          if ((ret == 9) || (ret == 1)) // Check if we got valid data
+          {
+            rxTest->background = ret == 1;
+            rxTest->rssi_background = (int16_t)rssi_bg;
+            rxTest->rssi_sat = (int16_t)rssi_sat;
+            rxTest->snr = (int16_t)snr;
+            rxTest->fdev = (int16_t)fdev;
+            rxTest->time.YYYY = YYYY;
+            rxTest->time.MM = MM;
+            rxTest->time.DD = DD;
+            rxTest->time.hh = hh;
+            rxTest->time.mm = mm;
+            rxTest->time.ss = ss;
+            rxTest->sat_id = sat_ID;
+
+            if (_swarmReceiveTestCallback != NULL)
+            {
+              _swarmReceiveTestCallback((const Swarm_M138_Receive_Test_t *)rxTest); // Call the callback
+            }
+
+            delete rxTest;
+            return (true);
+          }
+        }
+      }
+    }
+    delete rxTest;
+  }
   return false;
 } // /processUnsolicitedEvent
 
@@ -1945,6 +2018,232 @@ Swarm_M138_Error_e SWARM_M138::restartDevice(void)
 
 /**************************************************************************/
 /*!
+    @brief  Get the most recent $RT message
+    @param  rxTest
+            A pointer to a Swarm_M138_Receive_Test_t struct which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getReceiveTest(Swarm_M138_Receive_Test_t *rxTest)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_RX_TEST) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_RX_TEST) + 7); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_RX_TEST); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$RT ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$RT ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 9))) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the receive test info
+    int rssi_bg = 0, rssi_sat = 0, snr = 0, fdev = 0;
+    int YYYY = 0, MM = 0, DD = 0, hh = 0, mm = 0, ss = 0;
+    uint32_t sat_ID = 0;
+
+    int ret = sscanf(responseStart, "$RT RSSI=%d,SNR=%d,FDEV=%d,TS=%d-%d-%dT%d:%d:%d,DI=0x",
+                     &rssi_sat, &snr, &fdev, &YYYY, &MM, &DD, &hh, &mm, &ss);
+
+    if (ret == 9)
+    {
+      responseStart = strstr(response, "DI=0x"); // Find the start of the satellite ID
+
+      // Extract the ID
+      responseStart += 5; // Point at the first digit
+      while (responseStart < responseEnd)
+      {
+        sat_ID <<= 4; // Shuffle the existing value along by 4 bits
+        char c = *responseStart; // Get the digit
+        if ((c >= '0') && (c <= '9'))
+          sat_ID |= c - '0';
+        else if ((c >= 'a') && (c <= 'f'))
+          sat_ID |= c + 10 - 'a';
+        else if ((c >= 'A') && (c <= 'F'))
+          sat_ID |= c + 10 - 'A';
+        responseStart++;
+      }
+    }
+    else // Try to extract just rssi_background
+    {
+      ret = sscanf(responseStart, "$RT RSSI=%d*", &rssi_bg);
+    }
+
+    if ((ret == 9) || (ret == 1)) // Check if we got valid data
+    {
+      rxTest->background = ret == 1;
+      rxTest->rssi_background = (int16_t)rssi_bg;
+      rxTest->rssi_sat = (int16_t)rssi_sat;
+      rxTest->snr = (int16_t)snr;
+      rxTest->fdev = (int16_t)fdev;
+      rxTest->time.YYYY = YYYY;
+      rxTest->time.MM = MM;
+      rxTest->time.DD = DD;
+      rxTest->time.hh = hh;
+      rxTest->time.mm = mm;
+      rxTest->time.ss = ss;
+      rxTest->sat_id = sat_ID;
+    }
+    else
+      err = SWARM_M138_ERROR_ERROR;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query the current $RT rate
+    @param  rate
+            A pointer to a uint32_t which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getReceiveTestRate(uint32_t *rate)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_RX_TEST) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_RX_TEST) + 7); // Clear it
+  sprintf(command, "%s ?*", SWARM_M138_COMMAND_RX_TEST); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$RT ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$RT ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL))
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the rate
+    char c;
+    uint32_t theRate = 0;
+    responseStart += 4; // Point at the first digit of the rate
+
+    c = *responseStart; // Get the first digit of the rate
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
+      {
+        theRate = theRate * 10;
+        theRate += (uint32_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the rate
+    }
+
+    *rate = theRate;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+
+/**************************************************************************/
+/*!
+    @brief  Set the rate of $RT receive test messages
+    @param  rate
+            The interval between messages
+            0 == Disable. Max is 2147483647 (2^31 - 1)
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_RATE if the rate is invalid
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setReceiveTestRate(uint32_t rate)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Check rate is within bounds
+  if (rate > SWARM_M138_MAX_MESSAGE_RATE)
+    return (SWARM_M138_ERROR_INVALID_RATE);
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_RX_TEST) + 1 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_RX_TEST) + 1 + 10 + 5); // Clear it
+  sprintf(command, "%s %u*", SWARM_M138_COMMAND_RX_TEST, rate); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$RT OK*", "$RT ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Set up the callback for the $DT Date Time message
     @param  swarmDateTimeCallback
             The address of the function to be called when an unsolicited $DT message arrives
@@ -2001,6 +2300,18 @@ void SWARM_M138::setGpsFixQualityCallback(void (*swarmGpsFixQualityCallback)(con
 void SWARM_M138::setPowerStatusCallback(void (*swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *power))
 {
   _swarmPowerStatusCallback = swarmPowerStatusCallback;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Set up the callback for the $RT receive test message
+    @param  swarmReceiveTestCallback
+            The address of the function to be called when an unsolicited $RT message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setReceiveTestCallback(void (*swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest))
+{
+  _swarmReceiveTestCallback = swarmReceiveTestCallback;
 }
 
 /**************************************************************************/
@@ -2444,8 +2755,8 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
       // _swarmBacklog is a global array that holds the backlog of any events
       // that came in while waiting for response. To be processed later within checkUnsolicitedMsg().
       // Note: the expectedResponse or expectedError will also be added to the backlog.
-      // Everything in the backlog is 'printable'. So it is OK to use strlen so long as there is a
-      // \0 at the end of the buffer
+      // Everything in the backlog is 'printable'. So it is OK to use strlen - so long as there is a
+      // \0 at the end of the buffer!
       size_t backlogLength = strlen((const char *)_swarmBacklog);
 
       if ((backlogLength + hwAvail) < _RxBuffSize) // Is there room to store the new data?

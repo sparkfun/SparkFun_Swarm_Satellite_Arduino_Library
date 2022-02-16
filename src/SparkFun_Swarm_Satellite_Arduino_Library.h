@@ -214,6 +214,7 @@ typedef struct
 /** A struct to hold the receive test results */
 typedef struct
 {
+  bool background; // If true: the struct holds the rssi_background only. If false: the struct holds everything except rssi_background.
   int16_t rssi_background; // Received background noise signal strength in dBm for open channel (integer).
   int16_t rssi_sat; // Received signal strength in dBm for packet from satellite (integer)
   int16_t snr; // Signal to noise ratio in dB for packet (integer)
@@ -353,7 +354,7 @@ public:
   Swarm_M138_Error_e transmitBinaryExpire(char *data, size_t len, uint64_t *id, uint32_t epoch); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
   Swarm_M138_Error_e transmitBinaryExpire(char *data, size_t len, uint64_t *id, uint32_t epoch, uint16_t appID); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
 
-  /**  Process unsolicited messages from the modem */
+  /**  Process unsolicited messages from the modem. Call the callbacks if required */
   bool checkUnsolicitedMsg(void);
 
   /** Callbacks (called by checkUnsolicitedMsg) */
