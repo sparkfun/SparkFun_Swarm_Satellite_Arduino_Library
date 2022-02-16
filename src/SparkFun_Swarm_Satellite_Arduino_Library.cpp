@@ -430,6 +430,65 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
     }
     delete info;
   }
+  { // $GS - GPS fix quality
+    Swarm_M138_GPS_Fix_Quality_t *fixQuality = new Swarm_M138_GPS_Fix_Quality_t;
+    char *eventStart;
+    char *eventEnd;
+
+    eventStart = strstr(event, "$GS ");
+    if (eventStart != NULL)
+    {
+      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+      if (eventEnd != NULL)
+      {
+        if (eventEnd >= (eventStart + 11)) // Check we have enough data
+        {
+          // Extract the GPS fix quality
+          int hdop, vdop, gnss_sats, unused;
+          char fix_type[3];
+
+          int ret = sscanf(eventStart, "$GS %d,%d,%d,%d,%c%c*", &hdop, &vdop, &gnss_sats, &unused, &fix_type[0], &fix_type[1]);
+
+          if (ret == 6)
+          {
+            fixQuality->hdop = (uint16_t)hdop;
+            fixQuality->vdop = (uint16_t)vdop;
+            fixQuality->gnss_sats = (uint8_t)gnss_sats;
+            fixQuality->unused = (uint8_t)unused;
+
+            fix_type[2] = 0; // Null-terminate the fix type
+            if (strstr(fix_type, "NF") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_NF;
+            else if (strstr(fix_type, "DR") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_DR;
+            else if (strstr(fix_type, "G2") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G2;
+            else if (strstr(fix_type, "G3") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G3;
+            else if (strstr(fix_type, "D2") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D2;
+            else if (strstr(fix_type, "D3") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D3;
+            else if (strstr(fix_type, "RK") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_RK;
+            else if (strstr(fix_type, "TT") != NULL)
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_TT;
+            else
+              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_INVALID;
+
+            if (_swarmGpsFixQualityCallback != NULL)
+            {
+              _swarmGpsFixQualityCallback((const Swarm_M138_GPS_Fix_Quality_t *)fixQuality); // Call the callback
+            }
+
+            delete fixQuality;
+            return (true);
+          }
+        }
+      }
+    }
+    delete fixQuality;
+  }
   return false;
 } // /processUnsolicitedEvent
 
@@ -1071,7 +1130,7 @@ Swarm_M138_Error_e SWARM_M138::getGeospatialInfo(Swarm_M138_GeospatialData_t *in
     responseStart = strstr(response, "$GN ");
     if (responseStart != NULL)
       responseEnd = strchr(responseStart, '*'); // Stop at the asterix
-    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 20))) // Check we have enough data
+    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 10))) // Check we have enough data
     {
       swarm_m138_free_char(command);
       swarm_m138_free_char(response);
@@ -1339,6 +1398,220 @@ Swarm_M138_Error_e SWARM_M138::setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode)
 
 /**************************************************************************/
 /*!
+    @brief  Get the most recent $GS message
+    @param  fixQuality
+            A pointer to a getGpsFixQuality(Swarm_M138_GPS_Fix_Quality_t struct which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getGpsFixQuality(Swarm_M138_GPS_Fix_Quality_t *fixQuality)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 7); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_GPS_FIX_QUAL); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$GS ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$GS ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 11))) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the GPS fix quality
+    int hdop, vdop, gnss_sats, unused;
+    char fix_type[3];
+
+    int ret = sscanf(responseStart, "$GS %d,%d,%d,%d,%c%c*", &hdop, &vdop, &gnss_sats, &unused, &fix_type[0], &fix_type[1]);
+
+    if (ret < 6)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    fixQuality->hdop = (uint16_t)hdop;
+    fixQuality->vdop = (uint16_t)vdop;
+    fixQuality->gnss_sats = (uint8_t)gnss_sats;
+    fixQuality->unused = (uint8_t)unused;
+
+    fix_type[2] = 0; // Null-terminate the fix type
+    if (strstr(fix_type, "NF") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_NF;
+    else if (strstr(fix_type, "DR") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_DR;
+    else if (strstr(fix_type, "G2") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G2;
+    else if (strstr(fix_type, "G3") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G3;
+    else if (strstr(fix_type, "D2") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D2;
+    else if (strstr(fix_type, "D3") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D3;
+    else if (strstr(fix_type, "RK") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_RK;
+    else if (strstr(fix_type, "TT") != NULL)
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_TT;
+    else
+      fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_INVALID;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query the current $GS rate
+    @param  rate
+            A pointer to a uint32_t which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getGpsFixQualityRate(uint32_t *rate)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 7); // Clear it
+  sprintf(command, "%s ?*", SWARM_M138_COMMAND_GPS_FIX_QUAL); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$GS ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$GS ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL))
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the rate
+    char c;
+    uint32_t theRate = 0;
+    responseStart += 4; // Point at the first digit of the rate
+
+    c = *responseStart; // Get the first digit of the rate
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
+      {
+        theRate = theRate * 10;
+        theRate += (uint32_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the rate
+    }
+
+    *rate = theRate;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+
+/**************************************************************************/
+/*!
+    @brief  Set the rate of $GS GPS fix quality messages
+    @param  rate
+            The interval between messages
+            0 == Disable. Max is 2147483647 (2^31 - 1)
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_RATE if the rate is invalid
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setGpsFixQualityRate(uint32_t rate)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Check rate is within bounds
+  if (rate > SWARM_M138_MAX_MESSAGE_RATE)
+    return (SWARM_M138_ERROR_INVALID_RATE);
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 1 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 1 + 10 + 5); // Clear it
+  sprintf(command, "%s %u*", SWARM_M138_COMMAND_GPS_FIX_QUAL, rate); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$GS OK*", "$GS ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Set up the callback for the $DT Date Time message
     @param  swarmDateTimeCallback
             The address of the function to be called when an unsolicited $DT message arrives
@@ -1371,6 +1644,18 @@ void SWARM_M138::setGpsJammingCallback(void (*swarmGpsJammingCallback)(const Swa
 void SWARM_M138::setGeospatialInfoCallback(void (*swarmGeospatialCallback)(const Swarm_M138_GeospatialData_t *info))
 {
   _swarmGeospatialCallback = swarmGeospatialCallback;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Set up the callback for the $GS GPS fix quality message
+    @param  swarmGeospatialCallback
+            The address of the function to be called when an unsolicited $GN message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setGpsFixQualityCallback(void (*swarmGpsFixQualityCallback)(const Swarm_M138_GPS_Fix_Quality_t *info))
+{
+  _swarmGpsFixQualityCallback = swarmGpsFixQualityCallback;
 }
 
 /**************************************************************************/

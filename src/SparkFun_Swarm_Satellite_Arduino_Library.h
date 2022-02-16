@@ -187,7 +187,8 @@ typedef enum
   SWARM_M138_GPS_FIX_TYPE_D2, // Differential 2D solution
   SWARM_M138_GPS_FIX_TYPE_D3, // Differential 3D solution
   SWARM_M138_GPS_FIX_TYPE_RK, // Combined GNSS + dead reckoning solution
-  SWARM_M138_GPS_FIX_TYPE_TT  // Time only solution
+  SWARM_M138_GPS_FIX_TYPE_TT, // Time only solution
+  SWARM_M138_GPS_FIX_TYPE_INVALID
 } Swarm_M138_GPS_Fix_Type_e;
 
 /** A struct to hold the GPS fix quality */
