@@ -489,6 +489,45 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
     }
     delete fixQuality;
   }
+  { // $PW - Power Status
+    Swarm_M138_Power_Status_t *powerStatus = new Swarm_M138_Power_Status_t;
+    char *eventStart;
+    char *eventEnd;
+
+    eventStart = strstr(event, "$PW ");
+    if (eventStart != NULL)
+    {
+      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+      if (eventEnd != NULL)
+      {
+        if (eventEnd >= (eventStart + 10)) // Check we have enough data
+        {
+          // Extract the power status
+          float unused1, unused2, unused3, unused4, temp;
+
+          int ret = sscanf(eventStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
+
+          if (ret == 5)
+          {
+            powerStatus->unused1 = unused1;
+            powerStatus->unused2 = unused2;
+            powerStatus->unused3 = unused3;
+            powerStatus->unused4 = unused4;
+            powerStatus->temp = temp;
+
+            if (_swarmPowerStatusCallback != NULL)
+            {
+              _swarmPowerStatusCallback((const Swarm_M138_Power_Status_t *)powerStatus); // Call the callback
+            }
+
+            delete powerStatus;
+            return (true);
+          }
+        }
+      }
+    }
+    delete powerStatus;
+  }
   return false;
 } // /processUnsolicitedEvent
 
@@ -1400,7 +1439,7 @@ Swarm_M138_Error_e SWARM_M138::setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode)
 /*!
     @brief  Get the most recent $GS message
     @param  fixQuality
-            A pointer to a getGpsFixQuality(Swarm_M138_GPS_Fix_Quality_t struct which will hold the result
+            A pointer to a Swarm_M138_GPS_Fix_Quality_t struct which will hold the result
     @return SWARM_M138_ERROR_SUCCESS if successful
             SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
             SWARM_M138_ERROR_ERROR if unsuccessful
@@ -1612,6 +1651,300 @@ Swarm_M138_Error_e SWARM_M138::setGpsFixQualityRate(uint32_t rate)
 
 /**************************************************************************/
 /*!
+    @brief  The Modem enters a low power mode until power is completely removed and restored
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::powerOff(void)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_POWER_OFF) + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_POWER_OFF) + 5); // Clear it
+  sprintf(command, "%s*", SWARM_M138_COMMAND_POWER_OFF); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$PO OK*", "$PO ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Get the most recent $PW message
+    @param  powerStatus
+            A pointer to a Swarm_M138_Power_Status_t struct which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getPowerStatus(Swarm_M138_Power_Status_t *powerStatus)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_POWER_STAT) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_POWER_STAT) + 7); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_POWER_STAT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$PW ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$PW ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 10))) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the power status
+    float unused1, unused2, unused3, unused4, temp;
+
+    int ret = sscanf(responseStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
+
+    if (ret < 5)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    powerStatus->unused1 = unused1;
+    powerStatus->unused2 = unused2;
+    powerStatus->unused3 = unused3;
+    powerStatus->unused4 = unused4;
+    powerStatus->temp = temp;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query the current $PW rate
+    @param  rate
+            A pointer to a uint32_t which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getPowerStatusRate(uint32_t *rate)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_POWER_STAT) + 7);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_POWER_STAT) + 7); // Clear it
+  sprintf(command, "%s ?*", SWARM_M138_COMMAND_POWER_STAT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$PW ", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$PW ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL))
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the rate
+    char c;
+    uint32_t theRate = 0;
+    responseStart += 4; // Point at the first digit of the rate
+
+    c = *responseStart; // Get the first digit of the rate
+    while (c != '*') // Keep going until we hit the asterix
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
+      {
+        theRate = theRate * 10;
+        theRate += (uint32_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the rate
+    }
+
+    *rate = theRate;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+
+/**************************************************************************/
+/*!
+    @brief  Set the rate of $PW power status messages
+    @param  rate
+            The interval between messages
+            0 == Disable. Max is 2147483647 (2^31 - 1)
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_RATE if the rate is invalid
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setPowerStatusRate(uint32_t rate)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Check rate is within bounds
+  if (rate > SWARM_M138_MAX_MESSAGE_RATE)
+    return (SWARM_M138_ERROR_INVALID_RATE);
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_POWER_STAT) + 1 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_POWER_STAT) + 1 + 10 + 5); // Clear it
+  sprintf(command, "%s %u*", SWARM_M138_COMMAND_POWER_STAT, rate); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$PW OK*", "$PW ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Get the modem temperature
+    @param  temperature
+            A pointer to a float which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getTemperature(float *temperature)
+{
+  Swarm_M138_Power_Status_t *powerStatus = new Swarm_M138_Power_Status_t;
+  Swarm_M138_Error_e err = getPowerStatus(powerStatus);
+  if (err == SWARM_M138_ERROR_SUCCESS)
+    *temperature = powerStatus->temp;
+  delete powerStatus;
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Restart the modem
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::restartDevice(void)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_RESTART) + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_RESTART) + 5); // Clear it
+  sprintf(command, "%s*", SWARM_M138_COMMAND_RESTART); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$RS OK*", "$RS ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Set up the callback for the $DT Date Time message
     @param  swarmDateTimeCallback
             The address of the function to be called when an unsolicited $DT message arrives
@@ -1649,13 +1982,25 @@ void SWARM_M138::setGeospatialInfoCallback(void (*swarmGeospatialCallback)(const
 /**************************************************************************/
 /*!
     @brief  Set up the callback for the $GS GPS fix quality message
-    @param  swarmGeospatialCallback
-            The address of the function to be called when an unsolicited $GN message arrives
+    @param  swarmGpsFixQualityCallback
+            The address of the function to be called when an unsolicited $GS message arrives
 */
 /**************************************************************************/
-void SWARM_M138::setGpsFixQualityCallback(void (*swarmGpsFixQualityCallback)(const Swarm_M138_GPS_Fix_Quality_t *info))
+void SWARM_M138::setGpsFixQualityCallback(void (*swarmGpsFixQualityCallback)(const Swarm_M138_GPS_Fix_Quality_t *fixQuality))
 {
   _swarmGpsFixQualityCallback = swarmGpsFixQualityCallback;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Set up the callback for the $PW power status message
+    @param  swarmPowerStatusCallback
+            The address of the function to be called when an unsolicited $PW message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setPowerStatusCallback(void (*swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *power))
+{
+  _swarmPowerStatusCallback = swarmPowerStatusCallback;
 }
 
 /**************************************************************************/
@@ -2000,7 +2345,7 @@ Swarm_M138_Error_e SWARM_M138::sendCommandWithResponse(
         // Now also copy the response into the backlog, if there is room
         size_t backlogLength = strlen((const char *)_swarmBacklog);
 
-        if ((backlogLength + bytesRead) <= _RxBuffSize) // Is there room to store the new data?
+        if ((backlogLength + bytesRead) < _RxBuffSize) // Is there room to store the new data?
         {
           memcpy((char *)&_swarmBacklog[backlogLength], (char *)&responseDest[destIndex], bytesRead);
         }
@@ -2056,7 +2401,7 @@ void SWARM_M138::sendCommand(const char *command)
   if (hwAvail > 0) //hwAvailable can return -1 if the serial port is NULL
   {
     size_t backlogLength = strlen((const char *)_swarmBacklog);
-    while (((millis() - timeIn) < _rxWindowMillis) && ((backlogLength + hwAvail) <= _RxBuffSize)) //May need to escape on newline?
+    while (((millis() - timeIn) < _rxWindowMillis) && ((backlogLength + hwAvail) < _RxBuffSize)) //May need to escape on newline?
     {
       if (hwAvail > 0) //hwAvailable can return -1 if the serial port is NULL
       {
@@ -2099,10 +2444,11 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
       // _swarmBacklog is a global array that holds the backlog of any events
       // that came in while waiting for response. To be processed later within checkUnsolicitedMsg().
       // Note: the expectedResponse or expectedError will also be added to the backlog.
-      // Everything in the backlog is 'printable'. So it is OK to use strlen.
+      // Everything in the backlog is 'printable'. So it is OK to use strlen so long as there is a
+      // \0 at the end of the buffer
       size_t backlogLength = strlen((const char *)_swarmBacklog);
 
-      if ((backlogLength + hwAvail) <= _RxBuffSize) // Is there room to store the new data?
+      if ((backlogLength + hwAvail) < _RxBuffSize) // Is there room to store the new data?
       {
         hwReadChars((char *)&_swarmBacklog[backlogLength], hwAvail);
 
