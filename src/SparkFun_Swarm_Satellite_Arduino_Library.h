@@ -122,6 +122,7 @@ typedef enum
   SWARM_M138_ERROR_INVALID_FORMAT,      ///< Indicates the command response format was invalid
   SWARM_M138_ERROR_INVALID_CHECKSUM,    ///< Indicates the command response checksum was invalid
   SWARM_M138_ERROR_INVALID_RATE,        ///< Indicates the message rate was invalid
+  SWARM_M138_ERROR_INVALID_MODE,        ///< Indicates the GPIO1 pin mode was invalid
   SWARM_M138_ERROR_ERR                  ///< Command input error (ERR) - the error is copied into commandError
 } Swarm_M138_Error_e;
 #define SWARM_M138_SUCCESS SWARM_M138_ERROR_SUCCESS ///< Hey, it worked!
@@ -172,7 +173,8 @@ typedef enum
   SWARM_M138_GPIO1_MESSAGES_PENDING_LOW,
   SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH,
   SWARM_M138_GPIO1_SLEEP_MODE_LOW,
-  SWARM_M138_GPIO1_SLEEP_MODE_HIGH
+  SWARM_M138_GPIO1_SLEEP_MODE_HIGH,
+  SWARM_M138_GPIO1_SLEEP_MODE_INVALID
 } Swarm_M138_GPIO1_Mode_e;
 
 /** Enum for the GPS fix type */
@@ -391,9 +393,7 @@ private:
 
   #define _RxBuffSize 512
   const unsigned long _rxWindowMillis = 5; // Wait up to 5ms for any more serial characters to arrive
-  char *_swarmRxBuffer; // Allocated in SWARM_M138::begin
-  char *_pruneBuffer;
-  char *_swarmBacklog;
+  char *_swarmBacklog; // Allocated in SWARM_M138::begin
 
   // Callbacks for unsolicited messages
   void (*_swarmDateTimeCallback)(const Swarm_M138_DateTimeData_t *dateTime);

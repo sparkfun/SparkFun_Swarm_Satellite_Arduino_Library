@@ -1,14 +1,14 @@
 /*!
- * @file Example4_GPSJammingSpoofing.ino
+ * @file Example5_GeospatialInformation.ino
  * 
  * @mainpage SparkFun Swarm Satellite Arduino Library
  * 
  * @section intro_sec Examples
  * 
  * This example shows how to:
- *   Set the rate for the $GJ GPS Jamming/Spoofing Indication message
- *   Set up a callback for the $GJ message
- *   Print the unsolicited messages from the callback
+ *   Set the rate for the $GN geospatial information message
+ *   Set up a callback for the $GN message
+ *   Print the unsolicited geospatial information messages from the callback
  * 
  * Want to support open source hardware? Buy a board from SparkFun!
  * SparkX Swarm Serial Breakout : https://www.sparkfun.com/products/19236
@@ -33,30 +33,25 @@ SWARM_M138 mySwarm;
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-// Callback: printGPSJamming will be called when a new unsolicited $GJ message arrives
-// See SparkFun_Swarm_Satellite_Arduino_Library.h for the full definition of Swarm_M138_GPS_Jamming_Indication_t
-//         _____  You can use any name you like for the callback. Use the same name when you call setGpsJammingCallback
-//        /                           _____  This _must_ be Swarm_M138_GPS_Jamming_Indication_t
-//        |                          /                               _____ You can use any name you like for the struct
-//        |                          |                              /
-//        |                          |                              |
-void printGPSJamming(const Swarm_M138_GPS_Jamming_Indication_t *jamming)
+// Callback: printGeospatial will be called when a new unsolicited $GN geospatial information message arrives
+// See SparkFun_Swarm_Satellite_Arduino_Library.h for the full definition of Swarm_M138_GeospatialData_t
+//         _____  You can use any name you like for the callback. Use the same name when you call setGeospatialInfoCallback
+//        /                         _____  This _must_ be Swarm_M138_GeospatialData_t
+//        |                        /                      _____ You can use any name you like for the struct
+//        |                        |                     /
+//        |                        |                     |
+void printGeospatial(const Swarm_M138_GeospatialData_t *info)
 {
-  Serial.print(F("New GPS jamming/spoofing indication received:  spoof_state : "));
-  
-  Serial.print(jamming->spoof_state);
-  Serial.print(F(" ("));
-  if (jamming->spoof_state == 0)
-    Serial.print(F("Spoofing unknown or deactivated"));
-  else if (jamming->spoof_state == 1)
-    Serial.print(F("No spoofing indicated"));
-  else if (jamming->spoof_state == 2)
-    Serial.print(F("Spoofing indicated"));
-  else // if (jamming->spoof_state == 3)
-    Serial.print(F("Multiple spoofing indications"));
-
-  Serial.print(F(")  jamming_level : "));
-  Serial.println(jamming->jamming_level);
+  Serial.print(F("New geospatial information received:  Lat: "));
+  Serial.print(info->lat, 4);
+  Serial.print(F("  Lon: "));
+  Serial.print(info->lon, 4);
+  Serial.print(F("  Alt: "));
+  Serial.print(info->alt, 2);
+  Serial.print(F("  Course: "));
+  Serial.print(info->course, 2);
+  Serial.print(F("  Speed: "));
+  Serial.println(info->speed, 2);
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -80,15 +75,21 @@ void setup()
       ;
   }
 
-  // Just to prove it works, call getGpsJammingIndication to request the most recent jamming indication
-  Swarm_M138_GPS_Jamming_Indication_t *jamming = new Swarm_M138_GPS_Jamming_Indication_t; // Allocate memory for the jamming indication
-  Swarm_M138_Error_e err = mySwarm.getGpsJammingIndication(jamming);
+  // Just to prove it works, call getGeospatialInfo to request the most recent geospatial information
+  Swarm_M138_GeospatialData_t *info = new Swarm_M138_GeospatialData_t; // Allocate memory for the information
+  Swarm_M138_Error_e err = mySwarm.getGeospatialInfo(info);
   if (err == SWARM_M138_SUCCESS)
   {
-    Serial.print(F("getGPSJammingIndication returned: "));
-    Serial.print(jamming->spoof_state);
+    Serial.print(F("getGeospatialInfo returned: "));
+    Serial.print(info->lat, 4);
     Serial.print(F(","));
-    Serial.println(jamming->jamming_level);
+    Serial.print(info->lon, 4);
+    Serial.print(F(","));
+    Serial.print(info->alt);
+    Serial.print(F(","));
+    Serial.print(info->course);
+    Serial.print(F(","));
+    Serial.println(info->speed);
   }
   else
   {
@@ -97,17 +98,17 @@ void setup()
     Serial.print(F(" : "));
     Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
   }
-  delete jamming; // Free the memory
+  delete info; // Free the memory
 
-  // Set up the callback for the jamming indication message. Call printGPSJamming when a new $GJ message arrives
-  mySwarm.setGpsJammingCallback(&printGPSJamming);
+  // Set up the callback for the geospatial information message. Call printGeospatial when a new $GN message arrives
+  mySwarm.setGeospatialInfoCallback(&printGeospatial);
 
-  // Set the jamming message rate: send the message every 2 seconds
-  err = mySwarm.setGpsJammingIndicationRate(2);
+  // Set the $GN message rate: send the message every 2 seconds
+  err = mySwarm.setGeospatialInfoRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
-    Serial.println(F("setGpsJammingIndicationRate was successful"));
+    Serial.println(F("setGeospatialInfoRate was successful"));
   }
   else
   {
@@ -126,9 +127,9 @@ void setup()
       Serial.println();
   }
 
-  // Just to prove it works, call getGpsJammingIndicationRate to check the message rate
+  // Just to prove it works, call getGeospatialInfoRate to check the message rate
   uint32_t rate;
-  err = mySwarm.getGpsJammingIndicationRate(&rate);
+  err = mySwarm.getGeospatialInfoRate(&rate);
   if (err == SWARM_M138_SUCCESS)
   {
     Serial.print(F("Message rate is "));

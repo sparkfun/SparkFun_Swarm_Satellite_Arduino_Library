@@ -49,9 +49,9 @@ void setup()
 
   char *firmwareVersion = new char[SWARM_M138_MEM_ALLOC_FV]; // Create storage for the configuration settings
 
-  Swarm_M138_Error_e err = mySwarm.getFirmwareVersion(firmwareVersion);
+  Swarm_M138_Error_e err = mySwarm.getFirmwareVersion(firmwareVersion); // Get the firmware version
   
-  if (err == SWARM_M138_SUCCESS) // Get the settings
+  if (err == SWARM_M138_SUCCESS)
   {
     Serial.print(F("The firmware version is: "));
     Serial.println(firmwareVersion);

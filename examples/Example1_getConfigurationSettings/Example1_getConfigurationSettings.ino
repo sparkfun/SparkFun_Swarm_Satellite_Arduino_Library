@@ -49,9 +49,9 @@ void setup()
 
   char *configSettings = new char[SWARM_M138_MEM_ALLOC_CS]; // Create storage for the configuration settings
 
-  Swarm_M138_Error_e err = mySwarm.getConfigurationSettings(configSettings);
+  Swarm_M138_Error_e err = mySwarm.getConfigurationSettings(configSettings); // Get the settings
   
-  if (err == SWARM_M138_SUCCESS) // Get the settings
+  if (err == SWARM_M138_SUCCESS)
   {
     Serial.print(F("The configuration settings are: "));
     Serial.println(configSettings);

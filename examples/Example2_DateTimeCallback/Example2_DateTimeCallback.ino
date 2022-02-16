@@ -115,7 +115,7 @@ void setup()
   // Set the Date/Time message rate: send the message every 2 seconds
   err = mySwarm.setDateTimeRate(2);
   
-  if (err == SWARM_M138_SUCCESS) // Get the settings
+  if (err == SWARM_M138_SUCCESS)
   {
     Serial.println(F("setDateTimeRate was successful"));
   }
