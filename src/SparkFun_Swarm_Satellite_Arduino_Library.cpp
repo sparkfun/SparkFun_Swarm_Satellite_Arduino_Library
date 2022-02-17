@@ -315,291 +315,453 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
 {
   { // $DT - Date/Time
     Swarm_M138_DateTimeData_t *dateTime = new Swarm_M138_DateTimeData_t;
-    char *eventStart;
-    char *eventEnd;
-
-    eventStart = strstr(event, "$DT ");
-    if (eventStart != NULL)
+    if (dateTime != NULL) // Check memory allocation was successful
     {
-      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
-      if (eventEnd != NULL)
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$DT ");
+      if (eventStart != NULL)
       {
-        if (eventEnd >= (eventStart + 20)) // Check we have enough data
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
         {
-          // Extract the Date, Time and flag
-          int year, month, day, hour, minute, second;
-          char valid;
-
-          int ret = sscanf(eventStart, "$DT %4d%2d%2d%2d%2d%2d,%c*", &year, &month, &day, &hour, &minute, &second, &valid);
-
-          if (ret == 7)
+          if (eventEnd >= (eventStart + 20)) // Check we have enough data
           {
-            dateTime->YYYY = (uint16_t)year;
-            dateTime->DD = (uint8_t)month;
-            dateTime->MM = (uint8_t)day;
-            dateTime->hh = (uint8_t)hour;
-            dateTime->mm = (uint8_t)minute;
-            dateTime->ss = (uint8_t)second;
-            dateTime->valid = valid == 'V' ? 1 : 0;
+            // Extract the Date, Time and flag
+            int year, month, day, hour, minute, second;
+            char valid;
 
-            if (_swarmDateTimeCallback != NULL)
+            int ret = sscanf(eventStart, "$DT %4d%2d%2d%2d%2d%2d,%c*", &year, &month, &day, &hour, &minute, &second, &valid);
+
+            if (ret == 7)
             {
-              _swarmDateTimeCallback((const Swarm_M138_DateTimeData_t *)dateTime); // Call the callback
-            }
+              dateTime->YYYY = (uint16_t)year;
+              dateTime->DD = (uint8_t)month;
+              dateTime->MM = (uint8_t)day;
+              dateTime->hh = (uint8_t)hour;
+              dateTime->mm = (uint8_t)minute;
+              dateTime->ss = (uint8_t)second;
+              dateTime->valid = valid == 'V' ? 1 : 0;
 
-            delete dateTime;
-            return (true);
+              if (_swarmDateTimeCallback != NULL)
+              {
+                _swarmDateTimeCallback((const Swarm_M138_DateTimeData_t *)dateTime); // Call the callback
+              }
+
+              delete dateTime;
+              return (true);
+            }
           }
         }
       }
+      delete dateTime;
     }
-    delete dateTime;
   }
   { // $GJ - jamming indication
     Swarm_M138_GPS_Jamming_Indication_t *jamming = new Swarm_M138_GPS_Jamming_Indication_t;
-    char *eventStart;
-    char *eventEnd;
-
-    eventStart = strstr(event, "$GJ ");
-    if (eventStart != NULL)
+    if (jamming != NULL) // Check memory allocation was successful
     {
-      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
-      if (eventEnd != NULL)
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$GJ ");
+      if (eventStart != NULL)
       {
-        if (eventEnd >= (eventStart + 3)) // Check we have enough data
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
         {
-          // Extract the spoof_state and jamming_level
-          int spoof_state, jamming_level;
-
-          int ret = sscanf(eventStart, "$GJ %d,%d*", &spoof_state, &jamming_level);
-
-          if (ret == 2)
+          if (eventEnd >= (eventStart + 3)) // Check we have enough data
           {
-            jamming->spoof_state = (uint8_t)spoof_state;
-            jamming->jamming_level = (uint8_t)jamming_level;
+            // Extract the spoof_state and jamming_level
+            int spoof_state, jamming_level;
 
-            if (_swarmGpsJammingCallback != NULL)
+            int ret = sscanf(eventStart, "$GJ %d,%d*", &spoof_state, &jamming_level);
+
+            if (ret == 2)
             {
-              _swarmGpsJammingCallback((const Swarm_M138_GPS_Jamming_Indication_t *)jamming); // Call the callback
-            }
+              jamming->spoof_state = (uint8_t)spoof_state;
+              jamming->jamming_level = (uint8_t)jamming_level;
 
-            delete jamming;
-            return (true);
+              if (_swarmGpsJammingCallback != NULL)
+              {
+                _swarmGpsJammingCallback((const Swarm_M138_GPS_Jamming_Indication_t *)jamming); // Call the callback
+              }
+
+              delete jamming;
+              return (true);
+            }
           }
         }
       }
+      delete jamming;
     }
-    delete jamming;
   }
   { // $GN - geospatial information
     Swarm_M138_GeospatialData_t *info = new Swarm_M138_GeospatialData_t;
-    char *eventStart;
-    char *eventEnd;
-
-    eventStart = strstr(event, "$GN ");
-    if (eventStart != NULL)
+    if (info != NULL) // Check memory allocation was successful
     {
-      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
-      if (eventEnd != NULL)
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$GN ");
+      if (eventStart != NULL)
       {
-        if (eventEnd >= (eventStart + 10)) // Check we have enough data
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
         {
-          // Extract the geospatial info
-          float lat, lon, alt, course, speed;
-
-          int ret = sscanf(eventStart, "$GN %f,%f,%f,%f,%f*", &lat, &lon, &alt, &course, &speed);
-
-          if (ret == 5)
+          if (eventEnd >= (eventStart + 10)) // Check we have enough data
           {
-            info->lat = lat;
-            info->lon = lon;
-            info->alt = alt;
-            info->course = course;
-            info->speed = speed;
+            // Extract the geospatial info
+            float lat, lon, alt, course, speed;
 
-            if (_swarmGeospatialCallback != NULL)
+            int ret = sscanf(eventStart, "$GN %f,%f,%f,%f,%f*", &lat, &lon, &alt, &course, &speed);
+
+            if (ret == 5)
             {
-              _swarmGeospatialCallback((const Swarm_M138_GeospatialData_t *)info); // Call the callback
-            }
+              info->lat = lat;
+              info->lon = lon;
+              info->alt = alt;
+              info->course = course;
+              info->speed = speed;
 
-            delete info;
-            return (true);
+              if (_swarmGeospatialCallback != NULL)
+              {
+                _swarmGeospatialCallback((const Swarm_M138_GeospatialData_t *)info); // Call the callback
+              }
+
+              delete info;
+              return (true);
+            }
           }
         }
       }
+      delete info;
     }
-    delete info;
   }
   { // $GS - GPS fix quality
     Swarm_M138_GPS_Fix_Quality_t *fixQuality = new Swarm_M138_GPS_Fix_Quality_t;
-    char *eventStart;
-    char *eventEnd;
-
-    eventStart = strstr(event, "$GS ");
-    if (eventStart != NULL)
+    if (fixQuality != NULL) // Check memory allocation was successful
     {
-      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
-      if (eventEnd != NULL)
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$GS ");
+      if (eventStart != NULL)
       {
-        if (eventEnd >= (eventStart + 11)) // Check we have enough data
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
         {
-          // Extract the GPS fix quality
-          int hdop, vdop, gnss_sats, unused;
-          char fix_type[3];
-
-          int ret = sscanf(eventStart, "$GS %d,%d,%d,%d,%c%c*", &hdop, &vdop, &gnss_sats, &unused, &fix_type[0], &fix_type[1]);
-
-          if (ret == 6)
+          if (eventEnd >= (eventStart + 11)) // Check we have enough data
           {
-            fixQuality->hdop = (uint16_t)hdop;
-            fixQuality->vdop = (uint16_t)vdop;
-            fixQuality->gnss_sats = (uint8_t)gnss_sats;
-            fixQuality->unused = (uint8_t)unused;
+            // Extract the GPS fix quality
+            int hdop, vdop, gnss_sats, unused;
+            char fix_type[3];
 
-            fix_type[2] = 0; // Null-terminate the fix type
-            if (strstr(fix_type, "NF") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_NF;
-            else if (strstr(fix_type, "DR") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_DR;
-            else if (strstr(fix_type, "G2") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G2;
-            else if (strstr(fix_type, "G3") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G3;
-            else if (strstr(fix_type, "D2") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D2;
-            else if (strstr(fix_type, "D3") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D3;
-            else if (strstr(fix_type, "RK") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_RK;
-            else if (strstr(fix_type, "TT") != NULL)
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_TT;
-            else
-              fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_INVALID;
+            int ret = sscanf(eventStart, "$GS %d,%d,%d,%d,%c%c*", &hdop, &vdop, &gnss_sats, &unused, &fix_type[0], &fix_type[1]);
 
-            if (_swarmGpsFixQualityCallback != NULL)
+            if (ret == 6)
             {
-              _swarmGpsFixQualityCallback((const Swarm_M138_GPS_Fix_Quality_t *)fixQuality); // Call the callback
-            }
+              fixQuality->hdop = (uint16_t)hdop;
+              fixQuality->vdop = (uint16_t)vdop;
+              fixQuality->gnss_sats = (uint8_t)gnss_sats;
+              fixQuality->unused = (uint8_t)unused;
 
-            delete fixQuality;
-            return (true);
+              fix_type[2] = 0; // Null-terminate the fix type
+              if (strstr(fix_type, "NF") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_NF;
+              else if (strstr(fix_type, "DR") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_DR;
+              else if (strstr(fix_type, "G2") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G2;
+              else if (strstr(fix_type, "G3") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_G3;
+              else if (strstr(fix_type, "D2") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D2;
+              else if (strstr(fix_type, "D3") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_D3;
+              else if (strstr(fix_type, "RK") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_RK;
+              else if (strstr(fix_type, "TT") != NULL)
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_TT;
+              else
+                fixQuality->fix_type = SWARM_M138_GPS_FIX_TYPE_INVALID;
+
+              if (_swarmGpsFixQualityCallback != NULL)
+              {
+                _swarmGpsFixQualityCallback((const Swarm_M138_GPS_Fix_Quality_t *)fixQuality); // Call the callback
+              }
+
+              delete fixQuality;
+              return (true);
+            }
           }
         }
       }
+      delete fixQuality;
     }
-    delete fixQuality;
   }
   { // $PW - Power Status
     Swarm_M138_Power_Status_t *powerStatus = new Swarm_M138_Power_Status_t;
-    char *eventStart;
-    char *eventEnd;
-
-    eventStart = strstr(event, "$PW ");
-    if (eventStart != NULL)
+    if (powerStatus != NULL) // Check memory allocation was successful
     {
-      eventEnd = strchr(eventStart, '*'); // Stop at the asterix
-      if (eventEnd != NULL)
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$PW ");
+      if (eventStart != NULL)
       {
-        if (eventEnd >= (eventStart + 10)) // Check we have enough data
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
         {
-          // Extract the power status
-          float unused1, unused2, unused3, unused4, temp;
-
-          int ret = sscanf(eventStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
-
-          if (ret == 5)
+          if (eventEnd >= (eventStart + 10)) // Check we have enough data
           {
-            powerStatus->unused1 = unused1;
-            powerStatus->unused2 = unused2;
-            powerStatus->unused3 = unused3;
-            powerStatus->unused4 = unused4;
-            powerStatus->temp = temp;
+            // Extract the power status
+            float unused1, unused2, unused3, unused4, temp;
 
-            if (_swarmPowerStatusCallback != NULL)
+            int ret = sscanf(eventStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
+
+            if (ret == 5)
             {
-              _swarmPowerStatusCallback((const Swarm_M138_Power_Status_t *)powerStatus); // Call the callback
-            }
+              powerStatus->unused1 = unused1;
+              powerStatus->unused2 = unused2;
+              powerStatus->unused3 = unused3;
+              powerStatus->unused4 = unused4;
+              powerStatus->temp = temp;
 
-            delete powerStatus;
-            return (true);
+              if (_swarmPowerStatusCallback != NULL)
+              {
+                _swarmPowerStatusCallback((const Swarm_M138_Power_Status_t *)powerStatus); // Call the callback
+              }
+
+              delete powerStatus;
+              return (true);
+            }
           }
         }
       }
+      delete powerStatus;
     }
-    delete powerStatus;
   }
   { // $RT - Receive Test
     Swarm_M138_Receive_Test_t *rxTest = new Swarm_M138_Receive_Test_t;
+    if (rxTest != NULL) // Check memory allocation was successful
+    {
+      char *eventStart;
+      char *eventEnd;
+
+      eventStart = strstr(event, "$RT ");
+      if (eventStart != NULL)
+      {
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
+        {
+          if (eventEnd >= (eventStart + 9)) // Check we have enough data
+          {
+            // Extract the receive test info
+            int rssi_bg = 0, rssi_sat = 0, snr = 0, fdev = 0;
+            int YYYY = 0, MM = 0, DD = 0, hh = 0, mm = 0, ss = 0;
+            uint32_t sat_ID = 0;
+
+            int ret = sscanf(eventStart, "$RT RSSI=%d,SNR=%d,FDEV=%d,TS=%d-%d-%dT%d:%d:%d,DI=0x",
+                            &rssi_sat, &snr, &fdev, &YYYY, &MM, &DD, &hh, &mm, &ss);
+
+            if (ret == 9)
+            {
+              eventStart = strstr(eventStart, "DI=0x"); // Find the start of the satellite ID
+
+              // Extract the ID
+              eventStart += 5; // Point at the first digit
+              while (eventStart < eventEnd)
+              {
+                sat_ID <<= 4; // Shuffle the existing value along by 4 bits
+                char c = *eventStart; // Get the digit
+                if ((c >= '0') && (c <= '9'))
+                  sat_ID |= c - '0';
+                else if ((c >= 'a') && (c <= 'f'))
+                  sat_ID |= c + 10 - 'a';
+                else if ((c >= 'A') && (c <= 'F'))
+                  sat_ID |= c + 10 - 'A';
+                eventStart++;
+              }
+            }
+            else // Try to extract just rssi_background
+            {
+              ret = sscanf(eventStart, "$RT RSSI=%d*", &rssi_bg);
+            }
+
+            if ((ret == 9) || (ret == 1)) // Check if we got valid data
+            {
+              rxTest->background = ret == 1;
+              rxTest->rssi_background = (int16_t)rssi_bg;
+              rxTest->rssi_sat = (int16_t)rssi_sat;
+              rxTest->snr = (int16_t)snr;
+              rxTest->fdev = (int16_t)fdev;
+              rxTest->time.YYYY = YYYY;
+              rxTest->time.MM = MM;
+              rxTest->time.DD = DD;
+              rxTest->time.hh = hh;
+              rxTest->time.mm = mm;
+              rxTest->time.ss = ss;
+              rxTest->sat_id = sat_ID;
+
+              if (_swarmReceiveTestCallback != NULL)
+              {
+                _swarmReceiveTestCallback((const Swarm_M138_Receive_Test_t *)rxTest); // Call the callback
+              }
+
+              delete rxTest;
+              return (true);
+            }
+          }
+        }
+      }
+      delete rxTest;
+    }
+  }
+  { // $M138 - Modem Status
+    char *data = swarm_m138_alloc_char(SWARM_M138_MEM_ALLOC_MS);
+    if (data != NULL) // Check memory allocation was successful
+    {
+      Swarm_M138_Modem_Status_e status = SWARM_M138_MODEM_STATUS_INVALID;
+      char *eventStart;
+      char *eventEnd;
+
+      memset(data, 0, SWARM_M138_MEM_ALLOC_MS); // Clear the data
+
+      eventStart = strstr(event, "$M138 ");
+      if (eventStart != NULL)
+      {
+        eventEnd = strchr(eventStart, '*'); // Stop at the asterix
+        if (eventEnd != NULL)
+        {
+          if (eventEnd >= (eventStart + 6)) // Check we have enough data
+          {
+            // Extract the modem status
+
+            eventStart += 6; // Point at the first character of the msg
+
+            if (strstr(eventStart, "BOOT,ABORT") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_ABORT;
+              eventStart += strlen("BOOT,ABORT"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,POWERON") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_POWERON;
+              eventStart += strlen("BOOT,POWERON"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,RUNNING") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_RUNNING;
+              eventStart += strlen("BOOT,RUNNING"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,UPDATED") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_UPDATED;
+              eventStart += strlen("BOOT,UPDATED"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,VERSION") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_VERSION;
+              eventStart += strlen("BOOT,VERSION"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,RESTART") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_RESTART;
+              eventStart += strlen("BOOT,RESTART"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "BOOT,SHUTDOWN") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_SHUTDOWN;
+              eventStart += strlen("BOOT,SHUTDOWN"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "DATETIME") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_DATETIME;
+              eventStart += strlen("DATETIME"); // Point at the asterix
+            }
+            else if (strstr(eventStart, "POSITION") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_POSITION;
+              eventStart += strlen("POSITION"); // Point at the asterix
+            }
+            else if (strstr(eventStart, "DEBUG") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_DEBUG;
+              eventStart += strlen("DEBUG"); // Point at the comma (or asterix)
+            }
+            else if (strstr(eventStart, "ERROR") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_ERROR;
+              eventStart += strlen("ERROR"); // Point at the comma (or asterix)
+            }
+
+            if (*eventStart == ',') // Is eventStart pointing at a comma?
+              eventStart++; // Point at the next character
+
+            if (eventStart < eventEnd) // Check if we have reached the asterix
+            {
+              if (status == SWARM_M138_MODEM_STATUS_INVALID) // If status is still INVALID, this must be an unknown / undocumented message
+                status = SWARM_M138_MODEM_STATUS_UNKNOWN;
+
+              // Keep going until we hit the asterix or the data buffer is full
+              // Leave a NULL on the end of data!
+              size_t dataLen = 0;
+              while ((eventStart < eventEnd) && (dataLen < (SWARM_M138_MEM_ALLOC_MS - 1)))
+              {
+                data[dataLen] = *eventStart; // Copy the message data into data
+                dataLen++;
+                eventStart++;
+              }
+            }
+
+            if (status < SWARM_M138_MODEM_STATUS_INVALID) // Check if we got valid data
+            {
+              if (_swarmModemStatusCallback != NULL)
+              {
+                _swarmModemStatusCallback(status, data); // Call the callback
+              }
+
+              swarm_m138_free_char(data);
+              return (true);
+            }
+          }
+        }
+      }
+      swarm_m138_free_char(data);
+    }
+  }
+  { // $SL - Sleep Mode
+    Swarm_M138_Wake_Cause_e cause = SWARM_M138_WAKE_CAUSE_INVALID;
     char *eventStart;
     char *eventEnd;
 
-    eventStart = strstr(event, "$RT ");
+    eventStart = strstr(event, "$SL WAKE,");
     if (eventStart != NULL)
     {
       eventEnd = strchr(eventStart, '*'); // Stop at the asterix
       if (eventEnd != NULL)
       {
-        if (eventEnd >= (eventStart + 9)) // Check we have enough data
+        // Check for the wake cause
+        if (strstr(eventStart, "WAKE,GPIO") != NULL)
+          cause = SWARM_M138_WAKE_CAUSE_GPIO;
+        else if (strstr(eventStart, "WAKE,SERIAL") != NULL)
+          cause = SWARM_M138_WAKE_CAUSE_SERIAL;
+        else if (strstr(eventStart, "WAKE,TIME") != NULL)
+          cause = SWARM_M138_WAKE_CAUSE_TIME;
+
+        if (cause < SWARM_M138_WAKE_CAUSE_INVALID)
         {
-          // Extract the receive test info
-          int rssi_bg = 0, rssi_sat = 0, snr = 0, fdev = 0;
-          int YYYY = 0, MM = 0, DD = 0, hh = 0, mm = 0, ss = 0;
-          uint32_t sat_ID = 0;
-
-          int ret = sscanf(eventStart, "$RT RSSI=%d,SNR=%d,FDEV=%d,TS=%d-%d-%dT%d:%d:%d,DI=0x",
-                          &rssi_sat, &snr, &fdev, &YYYY, &MM, &DD, &hh, &mm, &ss);
-
-          if (ret == 9)
+          if (_swarmSleepWakeCallback != NULL)
           {
-            eventStart = strstr(eventStart, "DI=0x"); // Find the start of the satellite ID
-
-            // Extract the ID
-            eventStart += 5; // Point at the first digit
-            while (eventStart < eventEnd)
-            {
-              sat_ID <<= 4; // Shuffle the existing value along by 4 bits
-              char c = *eventStart; // Get the digit
-              if ((c >= '0') && (c <= '9'))
-                sat_ID |= c - '0';
-              else if ((c >= 'a') && (c <= 'f'))
-                sat_ID |= c + 10 - 'a';
-              else if ((c >= 'A') && (c <= 'F'))
-                sat_ID |= c + 10 - 'A';
-              eventStart++;
-            }
-          }
-          else // Try to extract just rssi_background
-          {
-            ret = sscanf(eventStart, "$RT RSSI=%d*", &rssi_bg);
+            _swarmSleepWakeCallback(cause); // Call the callback
           }
 
-          if ((ret == 9) || (ret == 1)) // Check if we got valid data
-          {
-            rxTest->background = ret == 1;
-            rxTest->rssi_background = (int16_t)rssi_bg;
-            rxTest->rssi_sat = (int16_t)rssi_sat;
-            rxTest->snr = (int16_t)snr;
-            rxTest->fdev = (int16_t)fdev;
-            rxTest->time.YYYY = YYYY;
-            rxTest->time.MM = MM;
-            rxTest->time.DD = DD;
-            rxTest->time.hh = hh;
-            rxTest->time.mm = mm;
-            rxTest->time.ss = ss;
-            rxTest->sat_id = sat_ID;
-
-            if (_swarmReceiveTestCallback != NULL)
-            {
-              _swarmReceiveTestCallback((const Swarm_M138_Receive_Test_t *)rxTest); // Call the callback
-            }
-
-            delete rxTest;
-            return (true);
-          }
+          return (true);
         }
       }
     }
-    delete rxTest;
   }
   return false;
 } // /processUnsolicitedEvent
@@ -1480,7 +1642,7 @@ Swarm_M138_Error_e SWARM_M138::setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode)
   Swarm_M138_Error_e err;
 
   // Check mode is within bounds
-  if ((int)mode >= SWARM_M138_GPIO1_SLEEP_MODE_INVALID)
+  if ((int)mode >= SWARM_M138_GPIO1_INVALID)
     return (SWARM_M138_ERROR_INVALID_MODE);
 
   // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
@@ -2244,6 +2406,136 @@ Swarm_M138_Error_e SWARM_M138::setReceiveTestRate(uint32_t rate)
 
 /**************************************************************************/
 /*!
+    @brief  Instruct the modem to sleep for this many seconds
+    @param  seconds
+            The sleep duration in seconds
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::sleepMode(uint32_t seconds)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_SLEEP) + 3 + 10 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_SLEEP) + 3 + 10 + 5); // Clear it
+  sprintf(command, "%s S=%d*", SWARM_M138_COMMAND_SLEEP, seconds); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$SL OK*", "$SL ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Instruct the modem to sleep until this date and time
+    @param  sleepUntil
+            A Swarm_M138_DateTimeData_t struct containing the date and time the modem should sleep until
+    @param  dateAndTime
+            If true (default), the modem will sleep until the specified date and time
+            If false, the modem will sleep until the specified time
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::sleepMode(Swarm_M138_DateTimeData_t sleepUntil, bool dateAndTime)
+{
+  char *command;
+  char *response;
+  char *scratchpad;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_SLEEP) + 3 + 19 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_SLEEP) + 3 + 19 + 5); // Clear it
+
+  scratchpad = swarm_m138_alloc_char(16); // Create a scratchpad to hold the date/time
+  if (scratchpad == NULL)
+  {
+    swarm_m138_free_char(command);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(scratchpad, 0, 16); // Clear it
+
+  sprintf(command, "%s U=", SWARM_M138_COMMAND_SLEEP); // Copy the command
+
+  // Note: some platforms do not support sprintf "%02d" correctly. We need to add the preceding zero manually...
+
+  if (dateAndTime) // Check if we need to include the date
+  {
+    sprintf(scratchpad, "%d", sleepUntil.YYYY); // Add the year
+    strcat(command, scratchpad);
+    strcat(command, "-");
+    sprintf(scratchpad, "%d", sleepUntil.MM); // Add the month
+    if (sleepUntil.MM < 10) strcat(command, "0");
+    strcat(command, scratchpad);
+    strcat(command, "-");
+    sprintf(scratchpad, "%d", sleepUntil.DD); // Add the day of month
+    if (sleepUntil.DD < 10) strcat(command, "0");
+    strcat(command, scratchpad);
+    strcat(command, " ");
+  }
+
+  sprintf(scratchpad, "%d", sleepUntil.hh); // Add the hour
+  if (sleepUntil.hh < 10) strcat(command, "0");
+  strcat(command, scratchpad);
+  strcat(command, ":");
+  sprintf(scratchpad, "%d", sleepUntil.mm); // Add the minute
+  if (sleepUntil.mm < 10) strcat(command, "0");
+  strcat(command, scratchpad);
+  strcat(command, ":");
+  sprintf(scratchpad, "%d", sleepUntil.ss); // Add the second
+  if (sleepUntil.ss < 10) strcat(command, "0");
+  strcat(command, scratchpad);
+
+  strcat(command, "*"); // Add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(scratchpad);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  sendCommand(command); // Send the command
+
+  err = waitForResponse("$SL OK*", "$SL ERR");
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(scratchpad);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Set up the callback for the $DT Date Time message
     @param  swarmDateTimeCallback
             The address of the function to be called when an unsolicited $DT message arrives
@@ -2316,6 +2608,30 @@ void SWARM_M138::setReceiveTestCallback(void (*swarmReceiveTestCallback)(const S
 
 /**************************************************************************/
 /*!
+    @brief  Set up the callback for the $M138 modem status messages
+    @param  swarmModemStatusCallback
+            The address of the function to be called when an unsolicited $M138 message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setModemStatusCallback(void (*swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *debugOrError))
+{
+  _swarmModemStatusCallback = swarmModemStatusCallback;
+}
+
+/**************************************************************************/
+/*!
+    @brief  Set up the callback for the $SL sleep mode messages
+    @param  swarmSleepWakeCallback
+            The address of the function to be called when an unsolicited $SL message arrives
+*/
+/**************************************************************************/
+void SWARM_M138::setSleepWakeCallback(void (*swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause))
+{
+  _swarmSleepWakeCallback = swarmSleepWakeCallback;
+}
+
+/**************************************************************************/
+/*!
     @brief  Convert modem status enum into printable text
     @param  status
             The modem status (enumerated)
@@ -2341,6 +2657,12 @@ const char *SWARM_M138::modemStatusString(Swarm_M138_Modem_Status_e status)
     case SWARM_M138_MODEM_STATUS_BOOT_VERSION:
       return "BOOT VERSION (Firmware version)";
       break;
+    case SWARM_M138_MODEM_STATUS_BOOT_RESTART:
+      return "BOOT RESTART (Modem is restarting)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_SHUTDOWN:
+      return "BOOT SHUTDOWN (Modem has shutdown. Disconnect power to restart)";
+      break;
     case SWARM_M138_MODEM_STATUS_DATETIME:
       return "DATETIME (GPS has acquired a valid date/time reference)";
       break;
@@ -2348,13 +2670,18 @@ const char *SWARM_M138::modemStatusString(Swarm_M138_Modem_Status_e status)
       return "POSITION (GPS has acquired a valid position 3D fix)";
       break;
     case SWARM_M138_MODEM_STATUS_DEBUG:
-      return "DEBUG (Debug message): ";
+      return "DEBUG (Debug message)";
       break;
     case SWARM_M138_MODEM_STATUS_ERROR:
-      return "ERROR (Error message): ";
+      return "ERROR (Error message)";
+      break;
+    case SWARM_M138_MODEM_STATUS_UNKNOWN:
+      return "UNKNOWN (undocumented)";
+      break;
+    default:
+      return "INVALID";
       break;
   }
-  return "UNKNOWN";
 }
 
 /**************************************************************************/

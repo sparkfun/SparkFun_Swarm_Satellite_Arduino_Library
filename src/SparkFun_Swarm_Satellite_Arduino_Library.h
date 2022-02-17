@@ -90,8 +90,10 @@
 #define SWARM_M138_MAX_PACKET_LENGTH_HEX 384 ///< The maximum packet length - encoded as ASCII Hex
 
 /** Minimum memory allocations for each message type */
-#define SWARM_M138_MEM_ALLOC_CS 30 // E.g. DI=0x001abe,DN=M138 . Should be 20 but maybe the modem model could be longer than 4 bytes?
-#define SWARM_M138_MEM_ALLOC_FV 37 // E.g. 2021-12-14T21:27:41,v1.5.0-rc4 . Should be 31 but maybe each v# could be three digits?
+#define SWARM_M138_MEM_ALLOC_CS 30 ///< E.g. DI=0x001abe,DN=M138 . Should be 20 but maybe the modem model could be longer than 4 bytes?
+#define SWARM_M138_MEM_ALLOC_FV 37 ///< E.g. 2021-12-14T21:27:41,v1.5.0-rc4 . Should be 31 but maybe each v# could be three digits?
+#define SWARM_M138_MEM_ALLOC_MS 128 ///< Allocate enough storage to hold the $M138 Modem Status debug or error text. GUESS! TO DO: confirm the true max length
+
 
 /** Suported Commands */
 const char SWARM_M138_COMMAND_CONFIGURATION[] = "$CS";    ///< Configuration Settings
@@ -174,7 +176,7 @@ typedef enum
   SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH,
   SWARM_M138_GPIO1_SLEEP_MODE_LOW,
   SWARM_M138_GPIO1_SLEEP_MODE_HIGH,
-  SWARM_M138_GPIO1_SLEEP_MODE_INVALID
+  SWARM_M138_GPIO1_INVALID
 } Swarm_M138_GPIO1_Mode_e;
 
 /** Enum for the GPS fix type */
@@ -228,7 +230,8 @@ typedef enum
 {
   SWARM_M138_WAKE_CAUSE_GPIO = 0, // GPIO input changed from inactive to active state
   SWARM_M138_WAKE_CAUSE_SERIAL,   // Activity was detected on the RX pin of the Modem's UART
-  SWARM_M138_WAKE_CAUSE_TIME      // The S or U parameter time has been reached
+  SWARM_M138_WAKE_CAUSE_TIME,     // The S or U parameter time has been reached
+  SWARM_M138_WAKE_CAUSE_INVALID
 } Swarm_M138_Wake_Cause_e;
 
 /** An enum for the modem status */
@@ -239,10 +242,14 @@ typedef enum
   SWARM_M138_MODEM_STATUS_BOOT_RUNNING, // Boot has completed and ready to accept commands
   SWARM_M138_MODEM_STATUS_BOOT_UPDATED, // A firmware update was performed
   SWARM_M138_MODEM_STATUS_BOOT_VERSION, // Current firmware version information
+  SWARM_M138_MODEM_STATUS_BOOT_RESTART, // Modem is restarting after $RS Restart Device
+  SWARM_M138_MODEM_STATUS_BOOT_SHUTDOWN, // Modem has shutdown after $PO Power Off. Disconnect and reconnect power to restart
   SWARM_M138_MODEM_STATUS_DATETIME, // The first time GPS has acquired a valid date/time reference
   SWARM_M138_MODEM_STATUS_POSITION, // The first time GPS has acquired a valid position 3D fix
   SWARM_M138_MODEM_STATUS_DEBUG, // Debug message (data - debug text)
-  SWARM_M138_MODEM_STATUS_ERROR // Error message (data - error text)  
+  SWARM_M138_MODEM_STATUS_ERROR, // Error message (data - error text)
+  SWARM_M138_MODEM_STATUS_UNKNOWN, // A new, undocumented message
+  SWARM_M138_MODEM_STATUS_INVALID
 } Swarm_M138_Modem_Status_e;
 
 /** Communication interface for the Swarm M138 satellite modem. */
@@ -318,7 +325,7 @@ public:
 
   /** Sleep Mode */
   Swarm_M138_Error_e sleepMode(uint32_t seconds); // Sleep for this many seconds
-  Swarm_M138_Error_e sleepMode(Swarm_M138_DateTimeData_t sleepUntil); // Sleep until this date and time
+  Swarm_M138_Error_e sleepMode(Swarm_M138_DateTimeData_t sleepUntil, bool dateAndTime = true); // Sleep until this date and time. Set dateAndTime to false to sleep until a time
 
   /** Messages Received Management */
   Swarm_M138_Error_e getRxMessageCount(uint16_t *count, bool unread = false); // Return count of all messages (default) or unread messages (unread = true)
@@ -365,8 +372,8 @@ public:
   void setPowerStatusCallback(void (*swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *status)); // Set callback for $PW
   void setReceiveMessageCallback(void (*swarmReceiveMessageCallback)(const uint16_t *appID, const int16_t *rssi, const int16_t *snr, const int16_t *fdev, const char *asciiHex)); // Set callback for $RD
   void setReceiveTestCallback(void (*swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest)); // Set callback for $RT
-  void setSleepWakeCallback(void (*swramSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL
-  void setModemStatusCallback(void (*swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data)); // Set callback for $M138. data will be NULL if status is < SWARM_M138_MODEM_STATUS_DEBUG
+  void setSleepWakeCallback(void (*swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL
+  void setModemStatusCallback(void (*swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data)); // Set callback for $M138. data could be NULL for messages like BOOT_RUNNING
   void setTransmitDataCallback(void (*swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id)); // Set callback for $TD SENT
 
   /** Convert modem status enum etc. into printable text */
