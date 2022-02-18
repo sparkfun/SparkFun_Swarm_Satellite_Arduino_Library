@@ -316,7 +316,7 @@ public:
   Swarm_M138_Error_e getTemperature(float *temperature); // Get the most recent temperature
 
   /** Restart Device */
-  Swarm_M138_Error_e restartDevice(void); // Restart the modem
+  Swarm_M138_Error_e restartDevice(bool dbinit = false); // Restart the modem. Optionally clear the message database, to clear the DBXTOHIVEFULL error
 
   /** Receive Test */
   Swarm_M138_Error_e getReceiveTest(Swarm_M138_Receive_Test_t *rxTest); // Get the most recent $RT message
@@ -329,37 +329,37 @@ public:
 
   /** Messages Received Management */
   Swarm_M138_Error_e getRxMessageCount(uint16_t *count, bool unread = false); // Return count of all messages (default) or unread messages (unread = true)
-  Swarm_M138_Error_e deleteRxMessage(uint64_t id); // Delete RX message with ID
+  Swarm_M138_Error_e deleteRxMessage(uint64_t msg_id); // Delete RX message with ID
   Swarm_M138_Error_e deleteAllRxMessages(bool read = true); // Delete all read RX messages (default) or all messages (read = false)
-  Swarm_M138_Error_e markRxMessage(uint64_t id); // Mark message ID as read
+  Swarm_M138_Error_e markRxMessage(uint64_t msg_id); // Mark message ID as read
   Swarm_M138_Error_e markAllRxMessages(void); // Mark all messages as read
   Swarm_M138_Error_e getMessageNotifications(bool *enabled); // Query if message notifications are enabled
   Swarm_M138_Error_e setMessageNotifications(bool enable); // Enable / disable message notifications
-  Swarm_M138_Error_e readMessage(uint64_t id, char *asciiHex, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the message with ID. Message contents are copied to asciiHex as ASCII Hex
-  Swarm_M138_Error_e readOldestMessage(char *asciiHex, uint64_t *id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
-  Swarm_M138_Error_e readNewestMessage(char *asciiHex, uint64_t *id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
+  Swarm_M138_Error_e readMessage(uint64_t msg_id, char *asciiHex, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the message with ID. Message contents are copied to asciiHex as ASCII Hex
+  Swarm_M138_Error_e readOldestMessage(char *asciiHex, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
+  Swarm_M138_Error_e readNewestMessage(char *asciiHex, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
 
   /** Messages To Transmit Management */
   Swarm_M138_Error_e getUnsentMessageCount(uint16_t *count); // Return count of all unsent messages
-  Swarm_M138_Error_e deleteTxMessage(uint64_t id); // Delete TX message with ID
+  Swarm_M138_Error_e deleteTxMessage(uint64_t msg_id); // Delete TX message with ID
   Swarm_M138_Error_e deleteAllTxMessages(void); // Delete all unsent messages
-  Swarm_M138_Error_e listTxMessage(uint64_t id, char *asciiHex, uint32_t *epoch = NULL); // List unsent message with ID
+  Swarm_M138_Error_e listTxMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL); // List unsent message with ID
   Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids); // List the IDs of all unsent messages. Call getUnsentMessageCount first so you know how many IDs to expect
 
   /** Transmit Data */
   // The application ID is optional. Valid appID's are: 0 to 64999. Swarm reserves use of 65000 - 65535.
-  Swarm_M138_Error_e transmitText(char *data, uint64_t *id); // Send ASCII string. Assigned message ID is returned in id.
-  Swarm_M138_Error_e transmitText(char *data, uint64_t *id, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id.
-  Swarm_M138_Error_e transmitTextHold(char *data, uint64_t *id, uint32_t hold); // Send ASCII string. Assigned message ID is returned in id. Hold for up to hold seconds
-  Swarm_M138_Error_e transmitTextHold(char *data, uint64_t *id, uint32_t hold, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id. Hold for up to hold seconds
-  Swarm_M138_Error_e transmitTextExpire(char *data, uint64_t *id, uint32_t epoch); // Send ASCII string. Assigned message ID is returned in id. Expire message at epoch
-  Swarm_M138_Error_e transmitTextExpire(char *data, uint64_t *id, uint32_t epoch, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id. Expire message at epoch
-  Swarm_M138_Error_e transmitBinary(char *data, size_t len, uint64_t *id); // Send binary data. Assigned message ID is returned in id.
-  Swarm_M138_Error_e transmitBinary(char *data, size_t len, uint64_t *id, uint16_t appID); // Send binary data. Assigned message ID is returned in id.
-  Swarm_M138_Error_e transmitBinaryHold(char *data, size_t len, uint64_t *id, uint32_t hold); // Send binary data. Assigned message ID is returned in id. Hold for up to hold seconds
-  Swarm_M138_Error_e transmitBinaryHold(char *data, size_t len, uint64_t *id, uint32_t hold, uint16_t appID); // Send binary data. Assigned message ID is returned in id. Hold for up to hold seconds
-  Swarm_M138_Error_e transmitBinaryExpire(char *data, size_t len, uint64_t *id, uint32_t epoch); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
-  Swarm_M138_Error_e transmitBinaryExpire(char *data, size_t len, uint64_t *id, uint32_t epoch, uint16_t appID); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
+  Swarm_M138_Error_e transmitText(const char *data, uint64_t *msg_id); // Send ASCII string. Assigned message ID is returned in id.
+  Swarm_M138_Error_e transmitText(const char *data, uint64_t *msg_id, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id.
+  Swarm_M138_Error_e transmitTextHold(const char *data, uint64_t *msg_id, uint32_t hold); // Send ASCII string. Assigned message ID is returned in id. Hold for up to hold seconds
+  Swarm_M138_Error_e transmitTextHold(const char *data, uint64_t *msg_id, uint32_t hold, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id. Hold for up to hold seconds
+  Swarm_M138_Error_e transmitTextExpire(const char *data, uint64_t *msg_id, uint32_t epoch); // Send ASCII string. Assigned message ID is returned in id. Expire message at epoch
+  Swarm_M138_Error_e transmitTextExpire(const char *data, uint64_t *msg_id, uint32_t epoch, uint16_t appID); // Send ASCII string. Assigned message ID is returned in id. Expire message at epoch
+  Swarm_M138_Error_e transmitBinary(const uint8_t *data, size_t len, uint64_t *msg_id); // Send binary data. Assigned message ID is returned in id.
+  Swarm_M138_Error_e transmitBinary(const uint8_t *data, size_t len, uint64_t *msg_id, uint16_t appID); // Send binary data. Assigned message ID is returned in id.
+  Swarm_M138_Error_e transmitBinaryHold(const uint8_t *data, size_t len, uint64_t *msg_id, uint32_t hold); // Send binary data. Assigned message ID is returned in id. Hold for up to hold seconds
+  Swarm_M138_Error_e transmitBinaryHold(const uint8_t *data, size_t len, uint64_t *msg_id, uint32_t hold, uint16_t appID); // Send binary data. Assigned message ID is returned in id. Hold for up to hold seconds
+  Swarm_M138_Error_e transmitBinaryExpire(const uint8_t *data, size_t len, uint64_t *msg_id, uint32_t epoch); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
+  Swarm_M138_Error_e transmitBinaryExpire(const uint8_t *data, size_t len, uint64_t *msg_id, uint32_t epoch, uint16_t appID); // Send binary data. Assigned message ID is returned in id. Expire message at epoch
 
   /**  Process unsolicited messages from the modem. Call the callbacks if required */
   bool checkUnsolicitedMsg(void);
@@ -372,9 +372,9 @@ public:
   void setPowerStatusCallback(void (*swarmPowerStatusCallback)(const Swarm_M138_Power_Status_t *status)); // Set callback for $PW
   void setReceiveMessageCallback(void (*swarmReceiveMessageCallback)(const uint16_t *appID, const int16_t *rssi, const int16_t *snr, const int16_t *fdev, const char *asciiHex)); // Set callback for $RD
   void setReceiveTestCallback(void (*swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest)); // Set callback for $RT
-  void setSleepWakeCallback(void (*swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL
+  void setSleepWakeCallback(void (*swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause)); // Set callback for $SL WAKE
   void setModemStatusCallback(void (*swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data)); // Set callback for $M138. data could be NULL for messages like BOOT_RUNNING
-  void setTransmitDataCallback(void (*swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id)); // Set callback for $TD SENT
+  void setTransmitDataCallback(void (*swarmTransmitDataCallback)(const int16_t *rssi_sat, const int16_t *snr, const int16_t *fdev, const uint64_t *msg_id)); // Set callback for $TD SENT
 
   /** Convert modem status enum etc. into printable text */
   const char *modemStatusString(Swarm_M138_Modem_Status_e status);
@@ -414,7 +414,7 @@ private:
   void (*_swarmReceiveTestCallback)(const Swarm_M138_Receive_Test_t *rxTest);
   void (*_swarmSleepWakeCallback)(Swarm_M138_Wake_Cause_e cause);
   void (*_swarmModemStatusCallback)(Swarm_M138_Modem_Status_e status, const char *data);
-  void (*_swarmTransmitDataCallback)(const uint16_t *rssi_sat, const uint16_t *snr, const uint16_t *fdev, uint64_t *id);
+  void (*_swarmTransmitDataCallback)(const int16_t *rssi_sat, const int16_t *snr, const int16_t *fdev, const uint64_t *id);
 
   // Add the two NMEA checksum bytes and line feed to a command
   void addChecksumLF(char *command);
@@ -426,14 +426,23 @@ private:
   Swarm_M138_Error_e extractCommandError(char *startPosition);
 
   // Send command with the start of an expected response 
-  Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponseStart, char *responseDest,
-                                             int destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
+  Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponseStart, const char *expectedErrorStart,
+                                             char *responseDest, int destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
 
   // Send a command (don't wait for a response)
   void sendCommand(const char *command);
 
   // Wait for an expected response or error (don't send a command)
-  Swarm_M138_Error_e waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart, unsigned long timeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
+  Swarm_M138_Error_e waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart,
+                                     char *responseDest, int destSize, unsigned long timeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
+
+  // Queue a text message for transmission
+  Swarm_M138_Error_e transmitText(const char *data, uint64_t *msg_id, bool useAppID, uint16_t appID,
+                                  bool useHold, uint32_t hold, bool useEpoch, uint32_t epoch);
+
+  // Queue a binary message for transmission
+  Swarm_M138_Error_e transmitBinary(const uint8_t *data, size_t len, uint64_t *msg_id, bool useAppID, uint16_t appID,
+                                  bool useHold, uint32_t hold, bool useEpoch, uint32_t epoch);
 
   bool initializeBuffers(void);
   bool processUnsolicitedEvent(const char *event);
