@@ -95,34 +95,29 @@ void setup()
 
   // Just to prove it works, call getGpsFixQuality to request the most recent GPS fix qwuality
   Swarm_M138_GPS_Fix_Quality_t *fixQuality = new Swarm_M138_GPS_Fix_Quality_t; // Allocate memory for the information
-  Swarm_M138_Error_e err = mySwarm.getGpsFixQuality(fixQuality);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("getGpsFixQuality returned: "));
-    Serial.print(fixQuality->hdop);
-    Serial.print(F(","));
-    Serial.print(fixQuality->vdop);
-    Serial.print(F(","));
-    Serial.print(fixQuality->gnss_sats);
-    Serial.print(F(","));
-    Serial.print(fixQuality->unused);
-    Serial.print(F(","));
-    Serial.println(fixQuality->fix_type);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGpsFixQuality(fixQuality);
+  
+  Serial.print(F("getGpsFixQuality returned: "));
+  Serial.print(fixQuality->hdop);
+  Serial.print(F(","));
+  Serial.print(fixQuality->vdop);
+  Serial.print(F(","));
+  Serial.print(fixQuality->gnss_sats);
+  Serial.print(F(","));
+  Serial.print(fixQuality->unused);
+  Serial.print(F(","));
+  Serial.println(fixQuality->fix_type);
+
   delete fixQuality; // Free the memory
+
 
   // Set up the callback for the GPS fix quality message. Call printGPSFix when a new $GS message arrives
   mySwarm.setGpsFixQualityCallback(&printGPSFix);
 
+
   // Set the $GS message rate: send the message every 2 seconds
-  err = mySwarm.setGpsFixQualityRate(2);
+  Swarm_M138_Error_e err = mySwarm.setGpsFixQualityRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
@@ -145,21 +140,14 @@ void setup()
       Serial.println();
   }
 
+
   // Just to prove it works, call getGpsFixQualityRate to check the message rate
   uint32_t rate;
-  err = mySwarm.getGpsFixQualityRate(&rate);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("Message rate is "));
-    Serial.println(rate);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGpsFixQualityRate(&rate);
+  
+  Serial.print(F("Message rate is "));
+  Serial.println(rate);
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

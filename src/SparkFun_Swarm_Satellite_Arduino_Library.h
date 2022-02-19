@@ -429,14 +429,14 @@ private:
 
   // Send command with the start of an expected response
   Swarm_M138_Error_e sendCommandWithResponse(const char *command, const char *expectedResponseStart, const char *expectedErrorStart,
-                                             char *responseDest, int destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
+                                             char *responseDest, size_t destSize, unsigned long commandTimeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
 
   // Send a command (don't wait for a response)
   void sendCommand(const char *command);
 
   // Wait for an expected response or error (don't send a command)
   Swarm_M138_Error_e waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart,
-                                     char *responseDest, int destSize, unsigned long timeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
+                                     char *responseDest, size_t destSize, unsigned long timeout = SWARM_M138_STANDARD_RESPONSE_TIMEOUT);
 
   // Queue a text message for transmission
   Swarm_M138_Error_e transmitText(const char *data, uint64_t *msg_id, bool useAppID, uint16_t appID,

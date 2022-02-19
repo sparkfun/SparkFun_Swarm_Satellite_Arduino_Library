@@ -1224,7 +1224,11 @@ Swarm_M138_Error_e SWARM_M138::setDateTimeRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_DATE_TIME_STAT) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_DATE_TIME_STAT, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_DATE_TIME_STAT, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -1476,7 +1480,11 @@ Swarm_M138_Error_e SWARM_M138::setGpsJammingIndicationRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_JAMMING) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_GPS_JAMMING, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_GPS_JAMMING, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -1668,7 +1676,11 @@ Swarm_M138_Error_e SWARM_M138::setGeospatialInfoRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_GEOSPATIAL_INFO) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_GEOSPATIAL_INFO, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_GEOSPATIAL_INFO, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -1991,7 +2003,11 @@ Swarm_M138_Error_e SWARM_M138::setGpsFixQualityRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_GPS_FIX_QUAL) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_GPS_FIX_QUAL, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_GPS_FIX_QUAL, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -2221,7 +2237,11 @@ Swarm_M138_Error_e SWARM_M138::setPowerStatusRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_POWER_STAT) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_POWER_STAT, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_POWER_STAT, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -2510,7 +2530,11 @@ Swarm_M138_Error_e SWARM_M138::setReceiveTestRate(uint32_t rate)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_RX_TEST) + 1 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s %u*", SWARM_M138_COMMAND_RX_TEST, rate); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s %lu*", SWARM_M138_COMMAND_RX_TEST, rate); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -2550,7 +2574,11 @@ Swarm_M138_Error_e SWARM_M138::sleepMode(uint32_t seconds)
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_SLEEP) + 3 + 10 + 5); // Clear it
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
   sprintf(command, "%s S=%d*", SWARM_M138_COMMAND_SLEEP, seconds); // Copy the command, add the asterix
+#else
+  sprintf(command, "%s S=%ld*", SWARM_M138_COMMAND_SLEEP, seconds); // Copy the command, add the asterix
+#endif
   addChecksumLF(command); // Add the checksum bytes and line feed
 
   response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
@@ -4185,14 +4213,22 @@ Swarm_M138_Error_e SWARM_M138::transmitText(const char *data, uint64_t *msg_id, 
   if (useHold)
   {
     strcat(command, "HD=");
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
     sprintf(scratchpad, "%d", hold);
+#else
+    sprintf(scratchpad, "%ld", hold);
+#endif
     strcat(command, scratchpad);
     strcat(command, ",");
   }
   if (useEpoch)
   {
     strcat(command, "ET=");
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
     sprintf(scratchpad, "%d", epoch);
+#else
+    sprintf(scratchpad, "%ld", epoch);
+#endif
     strcat(command, scratchpad);
     strcat(command, ",");
   }
@@ -4429,14 +4465,22 @@ Swarm_M138_Error_e SWARM_M138::transmitBinary(const uint8_t *data, size_t len, u
   if (useHold)
   {
     strcat(command, "HD=");
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
     sprintf(scratchpad, "%d", hold);
+#else
+    sprintf(scratchpad, "%ld", hold);
+#endif
     strcat(command, scratchpad);
     strcat(command, ",");
   }
   if (useEpoch)
   {
     strcat(command, "ET=");
+#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
     sprintf(scratchpad, "%d", epoch);
+#else
+    sprintf(scratchpad, "%ld", epoch);
+#endif
     strcat(command, scratchpad);
     strcat(command, ",");
   }
@@ -4910,7 +4954,7 @@ Swarm_M138_Error_e SWARM_M138::extractCommandError(char *startPosition)
 // Return true if expectedResponseStart is seen in the data followed by a \n
 Swarm_M138_Error_e SWARM_M138::sendCommandWithResponse(
     const char *command, const char *expectedResponseStart, const char *expectedErrorStart,
-    char *responseDest, int destSize, unsigned long commandTimeout)
+    char *responseDest, size_t destSize, unsigned long commandTimeout)
 {
   if (_printDebug == true)
     _debugPort->println(F("sendCommandWithResponse: ====>"));
@@ -4955,11 +4999,11 @@ void SWARM_M138::sendCommand(const char *command)
 }
 
 Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart, const char *expectedErrorStart,
-                                               char *responseDest, int destSize, unsigned long timeout)
+                                               char *responseDest, size_t destSize, unsigned long timeout)
 {
   unsigned long timeIn;
   bool found = false;
-  int destIndex = 0;
+  size_t destIndex = 0;
   bool responseStartSeen = false, errorStartSeen = false;
   int responseIndex = 0, errorIndex = 0;
   size_t responseStartedAt = 0, errorStartedAt = 0;
@@ -4971,12 +5015,12 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
 
   while ((!found) && ((timeIn + timeout) > millis()))
   {
-    int hwAvail = hwAvailable();
+    size_t hwAvail = hwAvailable();
     if (hwAvail > 0) //hwAvailable can return -1 if the serial port is NULL
     {
       if ((destIndex + hwAvail) < destSize) // Check there is room to store the response (with a null on the end!)
       {
-        int bytesRead = hwReadChars((char *)&responseDest[destIndex], hwAvail);
+        size_t bytesRead = hwReadChars((char *)&responseDest[destIndex], hwAvail);
 
         if (_printDebug == true)
         {

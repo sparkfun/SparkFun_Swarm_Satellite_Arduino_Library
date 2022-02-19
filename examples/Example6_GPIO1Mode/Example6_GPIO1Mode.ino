@@ -81,54 +81,47 @@ void setup()
       Serial.println();
   }
 
+
   // Just to prove it worked, call getGPIO1Mode to check the pin mode
   Swarm_M138_GPIO1_Mode_e mode;
-  err = mySwarm.getGPIO1Mode(&mode);
-  if (err == SWARM_M138_SUCCESS)
+  
+  mySwarm.getGPIO1Mode(&mode);
+  
+  Serial.print(F("The GPIO1 mode is: "));
+  Serial.print((int)mode);
+  Serial.print(F(" : "));
+  switch (mode)
   {
-    Serial.print(F("The GPIO1 mode is: "));
-    Serial.print((int)mode);
-    Serial.print(F(" : "));
-    switch (mode)
-    {
-      case SWARM_M138_GPIO1_ANALOG:
-        Serial.println(F(" Analog, pin is internally disconnected and not used (default)"));
-        break;
-      case SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH:
-        Serial.println(F(" Input, low-to-high transition exits sleep mode"));
-        break;
-      case SWARM_M138_GPIO1_EXIT_SLEEP_HIGH_LOW:
-        Serial.println(F(" Input, high-to-low transition exits sleep mode"));
-        break;
-      case SWARM_M138_GPIO1_OUTPUT_LOW:
-        Serial.println(F(" Output (open drain), set low"));
-        break;
-      case SWARM_M138_GPIO1_OUTPUT_HIGH:
-        Serial.println(F(" Output (open drain), set high/open"));
-        break;
-      case SWARM_M138_GPIO1_MESSAGES_PENDING_LOW:
-        Serial.println(F(" Output (open drain), low indicates messages pending for client"));
-        break;
-      case SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH:
-        Serial.println(F(" Output (open drain), high/open indicates messages pending for client"));
-        break;
-      case SWARM_M138_GPIO1_SLEEP_MODE_LOW:
-        Serial.println(F(" Output (open drain), low indicates in sleep mode. Otherwise output is high/open"));
-        break;
-      case SWARM_M138_GPIO1_SLEEP_MODE_HIGH:
-        Serial.println(F(" Output (open drain), high/open indicates in sleep mode. Otherwise output is low"));
-        break;
-      default:
-        Serial.println(F(" UNKNOWN"));
-        break;      
-    }
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
+    case SWARM_M138_GPIO1_ANALOG:
+      Serial.println(F(" Analog, pin is internally disconnected and not used (default)"));
+      break;
+    case SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH:
+      Serial.println(F(" Input, low-to-high transition exits sleep mode"));
+      break;
+    case SWARM_M138_GPIO1_EXIT_SLEEP_HIGH_LOW:
+      Serial.println(F(" Input, high-to-low transition exits sleep mode"));
+      break;
+    case SWARM_M138_GPIO1_OUTPUT_LOW:
+      Serial.println(F(" Output (open drain), set low"));
+      break;
+    case SWARM_M138_GPIO1_OUTPUT_HIGH:
+      Serial.println(F(" Output (open drain), set high/open"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_PENDING_LOW:
+      Serial.println(F(" Output (open drain), low indicates messages pending for client"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH:
+      Serial.println(F(" Output (open drain), high/open indicates messages pending for client"));
+      break;
+    case SWARM_M138_GPIO1_SLEEP_MODE_LOW:
+      Serial.println(F(" Output (open drain), low indicates in sleep mode. Otherwise output is high/open"));
+      break;
+    case SWARM_M138_GPIO1_SLEEP_MODE_HIGH:
+      Serial.println(F(" Output (open drain), high/open indicates in sleep mode. Otherwise output is low"));
+      break;
+    default:
+      Serial.println(F(" UNKNOWN"));
+      break;      
   }
 }
 

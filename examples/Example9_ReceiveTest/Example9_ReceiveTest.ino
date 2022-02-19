@@ -106,53 +106,48 @@ void setup()
 
   // Just to prove it works, call getReceiveTest to request the most recent RSSI etc.
   Swarm_M138_Receive_Test_t *rxTest = new Swarm_M138_Receive_Test_t; // Allocate memory for the information
-  Swarm_M138_Error_e err = mySwarm.getReceiveTest(rxTest);
-  if (err == SWARM_M138_SUCCESS)
+  
+  mySwarm.getReceiveTest(rxTest);
+  
+  Serial.print(F("getReceiveTest returned:"));
+  if (rxTest->background) // Check if rxTest contains only the background RSSI
   {
-    Serial.print(F("getReceiveTest returned:"));
-    if (rxTest->background) // Check if rxTest contains only the background RSSI
-    {
-      Serial.print(F("  rssi_background: "));
-      Serial.println(rxTest->rssi_background);
-    }
-    else
-    {
-      Serial.print(F("  rssi_sat: "));
-      Serial.print(rxTest->rssi_sat);
-      Serial.print(F("  snr: "));
-      Serial.print(rxTest->snr);
-      Serial.print(F("  fdev: "));
-      Serial.print(rxTest->fdev);
-      Serial.print(F("  "));
-      Serial.print(rxTest->time.YYYY);
-      Serial.print(F("/"));
-      if (rxTest->time.MM < 10) Serial.print(F("0")); Serial.print(rxTest->time.MM); // Print the month. Add a leading zero if required
-      Serial.print(F("/"));
-      if (rxTest->time.DD < 10) Serial.print(F("0")); Serial.print(rxTest->time.DD); // Print the day of month. Add a leading zero if required
-      Serial.print(F(" "));
-      if (rxTest->time.hh < 10) Serial.print(F("0")); Serial.print(rxTest->time.hh); // Print the hour. Add a leading zero if required
-      Serial.print(F(":"));
-      if (rxTest->time.mm < 10) Serial.print(F("0")); Serial.print(rxTest->time.mm); // Print the minute. Add a leading zero if required
-      Serial.print(F(":"));
-      if (rxTest->time.ss < 10) Serial.print(F("0")); Serial.print(rxTest->time.ss); // Print the second. Add a leading zero if required
-      Serial.print(F("  sat_id: 0x"));
-      Serial.println(rxTest->sat_id, HEX);
-    }
+    Serial.print(F("  rssi_background: "));
+    Serial.println(rxTest->rssi_background);
   }
   else
   {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
+    Serial.print(F("  rssi_sat: "));
+    Serial.print(rxTest->rssi_sat);
+    Serial.print(F("  snr: "));
+    Serial.print(rxTest->snr);
+    Serial.print(F("  fdev: "));
+    Serial.print(rxTest->fdev);
+    Serial.print(F("  "));
+    Serial.print(rxTest->time.YYYY);
+    Serial.print(F("/"));
+    if (rxTest->time.MM < 10) Serial.print(F("0")); Serial.print(rxTest->time.MM); // Print the month. Add a leading zero if required
+    Serial.print(F("/"));
+    if (rxTest->time.DD < 10) Serial.print(F("0")); Serial.print(rxTest->time.DD); // Print the day of month. Add a leading zero if required
+    Serial.print(F(" "));
+    if (rxTest->time.hh < 10) Serial.print(F("0")); Serial.print(rxTest->time.hh); // Print the hour. Add a leading zero if required
+    Serial.print(F(":"));
+    if (rxTest->time.mm < 10) Serial.print(F("0")); Serial.print(rxTest->time.mm); // Print the minute. Add a leading zero if required
+    Serial.print(F(":"));
+    if (rxTest->time.ss < 10) Serial.print(F("0")); Serial.print(rxTest->time.ss); // Print the second. Add a leading zero if required
+    Serial.print(F("  sat_id: 0x"));
+    Serial.println(rxTest->sat_id, HEX);
   }
+
   delete rxTest; // Free the memory
+
 
   // Set up the callback for the receive test message. Call printRxTest when a new $RT message arrives
   mySwarm.setReceiveTestCallback(&printRxTest);
 
+
   // Set the $RT message rate: send the message every 2 seconds
-  err = mySwarm.setReceiveTestRate(2);
+  Swarm_M138_Error_e err = mySwarm.setReceiveTestRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
@@ -175,21 +170,14 @@ void setup()
       Serial.println();
   }
 
+
   // Just to prove it works, call getReceiveTestRate to check the message rate
   uint32_t rate;
-  err = mySwarm.getReceiveTestRate(&rate);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("Message rate is "));
-    Serial.println(rate);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getReceiveTestRate(&rate);
+
+  Serial.print(F("Message rate is "));
+  Serial.println(rate);
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

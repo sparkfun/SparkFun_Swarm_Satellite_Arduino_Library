@@ -1,11 +1,12 @@
 /*!
- * @file Example3_getFirmwareVersion.ino
+ * @file Example18_DisableUnsolicitedMessages.ino
  * 
  * @mainpage SparkFun Swarm Satellite Arduino Library
  * 
  * @section intro_sec Examples
  * 
- * This example shows how to read the firmware version) from the modem.
+ * This example shows how to:
+ *   Disable all the unsolicited messages
  * 
  * Want to support open source hardware? Buy a board from SparkFun!
  * SparkX Swarm Serial Breakout : https://www.sparkfun.com/products/19236
@@ -28,6 +29,8 @@
 SWARM_M138 mySwarm;
 #define swarmSerial Serial1 // Use Serial1 to communicate with the modem. Change this if required.
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
 void setup()
 {
   delay(1000);
@@ -47,17 +50,18 @@ void setup()
       ;
   }
 
-  char *firmwareVersion = new char[SWARM_M138_MEM_ALLOC_FV]; // Create storage for the configuration settings
-
-  mySwarm.getFirmwareVersion(firmwareVersion); // Get the firmware version
-  
-  Serial.print(F("The firmware version is: "));
-  Serial.println(firmwareVersion);
-
-  delete[] firmwareVersion; // Free the storage
+  mySwarm.setDateTimeRate(0);
+  mySwarm.setGpsJammingIndicationRate(0);
+  mySwarm.setGeospatialInfoRate(0);
+  mySwarm.setGpsFixQualityRate(0);
+  mySwarm.setPowerStatusRate(0);
+  mySwarm.setReceiveTestRate(0);
+  mySwarm.setMessageNotifications(false);
 }
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 void loop()
 {
-  //Nothing to do here
+  // Nothing to do here
 }

@@ -82,28 +82,23 @@ void setup()
 
   // Just to prove it works, call getGpsJammingIndication to request the most recent jamming indication
   Swarm_M138_GPS_Jamming_Indication_t *jamming = new Swarm_M138_GPS_Jamming_Indication_t; // Allocate memory for the jamming indication
-  Swarm_M138_Error_e err = mySwarm.getGpsJammingIndication(jamming);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("getGPSJammingIndication returned: "));
-    Serial.print(jamming->spoof_state);
-    Serial.print(F(","));
-    Serial.println(jamming->jamming_level);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGpsJammingIndication(jamming);
+  
+  Serial.print(F("getGPSJammingIndication returned: "));
+  Serial.print(jamming->spoof_state);
+  Serial.print(F(","));
+  Serial.println(jamming->jamming_level);
+  
   delete jamming; // Free the memory
+
 
   // Set up the callback for the jamming indication message. Call printGPSJamming when a new $GJ message arrives
   mySwarm.setGpsJammingCallback(&printGPSJamming);
 
+
   // Set the jamming message rate: send the message every 2 seconds
-  err = mySwarm.setGpsJammingIndicationRate(2);
+  Swarm_M138_Error_e err = mySwarm.setGpsJammingIndicationRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
@@ -126,21 +121,14 @@ void setup()
       Serial.println();
   }
 
+
   // Just to prove it works, call getGpsJammingIndicationRate to check the message rate
   uint32_t rate;
-  err = mySwarm.getGpsJammingIndicationRate(&rate);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("Message rate is "));
-    Serial.println(rate);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGpsJammingIndicationRate(&rate);
+
+  Serial.print(F("Message rate is "));
+  Serial.println(rate);
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

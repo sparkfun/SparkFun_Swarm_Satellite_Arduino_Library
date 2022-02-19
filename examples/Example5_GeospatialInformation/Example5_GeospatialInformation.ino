@@ -77,34 +77,28 @@ void setup()
 
   // Just to prove it works, call getGeospatialInfo to request the most recent geospatial information
   Swarm_M138_GeospatialData_t *info = new Swarm_M138_GeospatialData_t; // Allocate memory for the information
-  Swarm_M138_Error_e err = mySwarm.getGeospatialInfo(info);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("getGeospatialInfo returned: "));
-    Serial.print(info->lat, 4);
-    Serial.print(F(","));
-    Serial.print(info->lon, 4);
-    Serial.print(F(","));
-    Serial.print(info->alt);
-    Serial.print(F(","));
-    Serial.print(info->course);
-    Serial.print(F(","));
-    Serial.println(info->speed);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGeospatialInfo(info);
+  
+  Serial.print(F("getGeospatialInfo returned: "));
+  Serial.print(info->lat, 4);
+  Serial.print(F(","));
+  Serial.print(info->lon, 4);
+  Serial.print(F(","));
+  Serial.print(info->alt);
+  Serial.print(F(","));
+  Serial.print(info->course);
+  Serial.print(F(","));
+  Serial.println(info->speed);
   delete info; // Free the memory
+
 
   // Set up the callback for the geospatial information message. Call printGeospatial when a new $GN message arrives
   mySwarm.setGeospatialInfoCallback(&printGeospatial);
 
+
   // Set the $GN message rate: send the message every 2 seconds
-  err = mySwarm.setGeospatialInfoRate(2);
+  Swarm_M138_Error_e err = mySwarm.setGeospatialInfoRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
@@ -127,21 +121,14 @@ void setup()
       Serial.println();
   }
 
+
   // Just to prove it works, call getGeospatialInfoRate to check the message rate
   uint32_t rate;
-  err = mySwarm.getGeospatialInfoRate(&rate);
-  if (err == SWARM_M138_SUCCESS)
-  {
-    Serial.print(F("Message rate is "));
-    Serial.println(rate);
-  }
-  else
-  {
-    Serial.print(F("Swarm communication error: "));
-    Serial.print((int)err);
-    Serial.print(F(" : "));
-    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
-  }
+  
+  mySwarm.getGeospatialInfoRate(&rate);
+
+  Serial.print(F("Message rate is "));
+  Serial.println(rate);
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
