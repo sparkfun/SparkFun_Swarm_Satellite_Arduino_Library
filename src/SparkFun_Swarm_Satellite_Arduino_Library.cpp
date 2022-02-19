@@ -2656,6 +2656,745 @@ Swarm_M138_Error_e SWARM_M138::sleepMode(Swarm_M138_DateTimeData_t sleepUntil, b
 
 /**************************************************************************/
 /*!
+    @brief  Return the count of all messages (default) or unread messages (unread = true)
+    @param  count
+            A pointer to a uint16_t which will hold the message count
+    @param  unread
+            If false (default): returns the count of all messages
+            If true: returns the count of the unread messages
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getRxMessageCount(uint16_t *count, bool unread)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9); // Clear it
+  if (unread)
+    sprintf(command, "%s C=U*", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  else
+    sprintf(command, "%s C=**", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$MM ", "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$MM ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL))
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Extract the count
+    char c;
+    uint16_t theCount = 0;
+    responseStart += 4; // Point at the first digit of the count
+
+    c = *responseStart; // Get the first digit of the count
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
+    {
+      if ((c >= '0') && (c <= '9')) // Extract the count one digit at a time
+      {
+        theCount = theCount * 10;
+        theCount += (uint16_t)(c - '0');
+      }
+      responseStart++;
+      c = *responseStart; // Get the next digit of the count
+    }
+
+    if (c == ',') // If we hit a comma, this must be a different $MM message
+    {
+      *count = 0; // Set count to zero in case the user is not checking err
+      err = SWARM_M138_ERROR_ERROR;
+    }
+    else
+    {
+      *count = theCount;
+    }
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Delete the RX message with the specified ID
+    @param  msg_id
+            The ID of the message to be deleted
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::deleteRxMessage(uint64_t msg_id)
+{
+  char *command;
+  char *response;
+  char *fwd;
+  char *rev;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5); // Clear it
+
+  // Allocate memory for the scratchpads
+  fwd = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+  if (fwd == NULL)
+  {
+    swarm_m138_free_char(command);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(fwd, 0, 21); // Clear it
+  rev = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+  if (rev == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(fwd);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(rev, 0, 21); // Clear it
+
+  sprintf(command, "%s D=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
+
+  // Add the 64-bit message ID
+  // Based on printLLNumber by robtillaart
+  // https://forum.arduino.cc/index.php?topic=143584.msg1519824#msg1519824
+  unsigned int i = 0;
+  if (msg_id == 0ULL) // if msg_id is zero, set fwd to "0"
+  {
+    fwd[0] = '0';
+  }
+  else
+  {
+    while (msg_id > 0)
+    {
+      rev[i++] = (msg_id % 10) + '0'; // divide by 10, convert the remainder to char
+      msg_id /= 10; // divide by 10
+    }
+    unsigned int j = 0;
+    while (i > 0)
+    {
+      fwd[j++] = rev[--i]; // reverse the order
+    }
+  }
+  strcat(command, fwd);
+
+  strcat(command, "*"); // Append the asterix
+
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(fwd);
+    swarm_m138_free_char(rev);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$MM DELETED", "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_DELETE_TIMEOUT);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(fwd);
+  swarm_m138_free_char(rev);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Delete all read RX messages (default) or all messages (read = false)
+    @param  read
+            If true (default): deletes the read messages
+            If false: deletes all messages
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::deleteAllRxMessages(bool read)
+{
+  char *command;
+  char *response;
+  char *scratchpad;
+  Swarm_M138_Error_e err;
+  uint16_t msgTotal = 0, unreadTotal = 0;
+
+  err = getRxMessageCount(&msgTotal, false); // Get the message count so we know how many messages to expect
+  if (err != SWARM_M138_ERROR_SUCCESS)
+    return (err);
+
+  err = getRxMessageCount(&unreadTotal, true); // Get the unread message count so we know how many messages to expect
+  if (err != SWARM_M138_ERROR_SUCCESS)
+    return (err);
+
+  if (unreadTotal > msgTotal) // Sanity check
+    return (SWARM_M138_ERROR_ERROR);
+
+  // If we are deleting all messages then msgTotal is correct
+  // If we are deleting only the read messages, then we need to subtract unreadTotal from msgTotal
+  if (read)
+    msgTotal -= unreadTotal;
+
+  if (_printDebug == true)
+  {
+    _debugPort->print(F("deleteAllRxMessages: msgTotal is "));
+    _debugPort->println(msgTotal);
+  }
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9); // Clear it
+  if (read)
+    sprintf(command, "%s D=R*", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  else
+    sprintf(command, "%s D=**", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  scratchpad = swarm_m138_alloc_char(16); // Create a scratchpad to hold the expectedResponse
+  if (scratchpad == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(response);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(scratchpad, 0, 16); // Clear it
+
+  sprintf(scratchpad, "$MM %d*", msgTotal); // Create the expected response
+
+  err = sendCommandWithResponse(command, scratchpad, "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_DELETE_TIMEOUT);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  swarm_m138_free_char(scratchpad);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Mark the RX message with the specified ID as read
+    @param  msg_id
+            The ID of the message to be marked as read
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::markRxMessage(uint64_t msg_id)
+{
+  char *command;
+  char *response;
+  char *fwd;
+  char *rev;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5); // Clear it
+
+  // Allocate memory for the scratchpads
+  fwd = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+  if (fwd == NULL)
+  {
+    swarm_m138_free_char(command);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(fwd, 0, 21); // Clear it
+  rev = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+  if (rev == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(fwd);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(rev, 0, 21); // Clear it
+
+  sprintf(command, "%s M=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
+
+  // Add the 64-bit message ID
+  // Based on printLLNumber by robtillaart
+  // https://forum.arduino.cc/index.php?topic=143584.msg1519824#msg1519824
+  unsigned int i = 0;
+  if (msg_id == 0ULL) // if msg_id is zero, set fwd to "0"
+  {
+    fwd[0] = '0';
+  }
+  else
+  {
+    while (msg_id > 0)
+    {
+      rev[i++] = (msg_id % 10) + '0'; // divide by 10, convert the remainder to char
+      msg_id /= 10; // divide by 10
+    }
+    unsigned int j = 0;
+    while (i > 0)
+    {
+      fwd[j++] = rev[--i]; // reverse the order
+    }
+  }
+  strcat(command, fwd);
+
+  strcat(command, "*"); // Append the asterix
+
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(fwd);
+    swarm_m138_free_char(rev);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$MM MARKED", "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(fwd);
+  swarm_m138_free_char(rev);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Mark all RX messages as read
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::markAllRxMessages(void)
+{
+  char *command;
+  char *response;
+  char *scratchpad;
+  Swarm_M138_Error_e err;
+  uint16_t msgTotal = 0;
+
+  err = getRxMessageCount(&msgTotal, false); // Get the message count so we know how many messages to expect
+  if (err != SWARM_M138_ERROR_SUCCESS)
+    return (err);
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9); // Clear it
+  sprintf(command, "%s M=**", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  scratchpad = swarm_m138_alloc_char(16); // Create a scratchpad to hold the expectedResponse
+  if (scratchpad == NULL)
+  {
+    swarm_m138_free_char(command);
+    swarm_m138_free_char(response);
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(scratchpad, 0, 16); // Clear it
+
+  sprintf(scratchpad, "$MM %d*", msgTotal); // Create the expected response
+
+  err = sendCommandWithResponse(command, scratchpad, "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  swarm_m138_free_char(scratchpad);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Query if message notifications are enabled
+    @param  enabled
+            A pointer to a bool to hold the status
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getMessageNotifications(bool *enabled)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9); // Clear it
+  sprintf(command, "%s N=?*", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$MM N=", "$MM ERR", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    char *enabledPtr = strstr(response, "$MM N=");
+    if (enabledPtr != NULL)
+      *enabled = *(enabledPtr + 6) == 'E';
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Enable / disable receive message notifications
+    @param  enable
+            If true: enable $RD message notifications
+            If false: disable $RD message notifications
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::setMessageNotifications(bool enable)
+{
+  char *command;
+  char *response;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 9); // Clear it
+  if (enable)
+    sprintf(command, "%s N=E*", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  else
+    sprintf(command, "%s N=D*", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command, add the asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "MM OK*", "$MM ERR", response, _RxBuffSize);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Read the message with the specified ID
+    @param  msg_id
+            The ID of the message to be read
+    @param  asciiHex
+            A pointer to a char array to hold the message
+    @param  len
+            The maximum message length which asciiHex can hold
+    @param  epoch
+            Optional: a pointer to a uint32_t to hold the epoch at which the modem received the message
+    @param  appID
+            Optional: a pointer to a uint16_t to hold the message appID if there is one
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::readMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch, uint16_t *appID)
+{
+  return (readMessageInternal('I', msg_id, asciiHex, len, NULL, epoch, appID));
+}
+/**************************************************************************/
+/*!
+    @brief  Read the oldest unread message
+    @param  asciiHex
+            A pointer to a char array to hold the message
+    @param  len
+            The maximum message length which asciiHex can hold
+    @param  msg_id
+            A pointer to a uint64_t to hold the message ID
+    @param  epoch
+            Optional: a pointer to a uint32_t to hold the epoch at which the modem received the message
+    @param  appID
+            Optional: a pointer to a uint16_t to hold the message appID if there is one
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::readOldestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch, uint16_t *appID)
+{
+  return (readMessageInternal('O', 0, asciiHex, len, msg_id, epoch, appID));
+}
+/**************************************************************************/
+/*!
+    @brief  Read the newest unread message
+    @param  asciiHex
+            A pointer to a char array to hold the message
+    @param  len
+            The maximum message length which asciiHex can hold
+    @param  msg_id
+            A pointer to a uint64_t to hold the message ID
+    @param  epoch
+            Optional: a pointer to a uint32_t to hold the epoch at which the modem received the message
+    @param  appID
+            Optional: a pointer to a uint16_t to hold the message appID if there is one
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::readNewestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch, uint16_t *appID)
+{
+  return (readMessageInternal('N', 0, asciiHex, len, msg_id, epoch, appID));
+}
+
+Swarm_M138_Error_e SWARM_M138::readMessageInternal(const char mode, uint64_t msg_id_in, char *asciiHex, size_t len, uint64_t *msg_id_out, uint32_t *epoch, uint16_t *appID)
+{
+  char *command;
+  char *response;
+  char *fwd;
+  char *rev;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  memset(asciiHex, 0, len); // Clear the char array
+
+  // Allocate memory for the command, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5); // Clear it
+
+  sprintf(command, "%s R=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
+
+  if (mode == 'I') // R=msgID
+  {
+    // Allocate memory for the scratchpads
+    fwd = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+    if (fwd == NULL)
+    {
+      swarm_m138_free_char(command);
+      return (SWARM_M138_ERROR_MEM_ALLOC);
+    }
+    memset(fwd, 0, 21); // Clear it
+    rev = swarm_m138_alloc_char(21); // Up to 20 digits plus null
+    if (rev == NULL)
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(fwd);
+      return (SWARM_M138_ERROR_MEM_ALLOC);
+    }
+    memset(rev, 0, 21); // Clear it
+
+    // Add the 64-bit message ID
+    // Based on printLLNumber by robtillaart
+    // https://forum.arduino.cc/index.php?topic=143584.msg1519824#msg1519824
+    unsigned int i = 0;
+    if (msg_id_in == 0ULL) // if msg_id is zero, set fwd to "0"
+    {
+      fwd[0] = '0';
+    }
+    else
+    {
+      while (msg_id_in > 0)
+      {
+        rev[i++] = (msg_id_in % 10) + '0'; // divide by 10, convert the remainder to char
+        msg_id_in /= 10; // divide by 10
+      }
+      unsigned int j = 0;
+      while (i > 0)
+      {
+        fwd[j++] = rev[--i]; // reverse the order
+      }
+    }
+    strcat(command, fwd);
+
+    swarm_m138_free_char(fwd);
+    swarm_m138_free_char(rev);
+  }
+  else if (mode == 'O') // R=O (Oldest)
+    strcat(command, "O");
+  else // if (mode == 'N') // R=N (Newest)
+    strcat(command, "N");
+
+  strcat(command, "*"); // Append the asterix
+
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$MM AI=", "$MM ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$MM AI="); // Find the start of the response
+    if (responseStart != NULL)
+    {
+      responseEnd = strchr(responseStart, '*'); // Find the asterix
+      if (responseEnd != NULL)
+      {
+        // Extract the appID if required
+        if (appID != NULL)
+        {
+          int appID_i = 0;
+          int ret = sscanf(responseStart, "$MM AI=%d,", &appID_i);
+          if (ret == 1)
+          {
+            *appID = (uint16_t)appID_i;
+          }
+        }
+
+        responseStart = strchr(responseStart, ','); // Find the first comma (we know it is there)
+        
+        if (responseStart != NULL)
+        {
+          responseStart++; // Point to the first digit of the ASCII Hex
+          size_t charsRead = 0;
+          char c = *responseStart;
+          while ((c != ',') && (responseStart < responseEnd) && (charsRead < len)) // Stop at the next comma
+          {
+            asciiHex[charsRead] = c; // Copy the char into asciiHex
+            responseStart++; // Increment the pointer
+            charsRead++; // Increment the counter
+            c = *responseStart; // Get the next char
+          }
+
+          if (msg_id_out != NULL) // Are we reading the oldest or newest message?
+          {
+            responseStart++; // Point to the first digit of the msg_id
+            uint64_t theID = 0;
+            char c = *responseStart;
+            while ((c != ',') && (responseStart < responseEnd))
+            {
+              // if (_printDebug == true)
+              //   _debugPort->write(c);
+              theID *= 10;
+              theID += (uint64_t)(c - '0');
+              responseStart++;
+              c = *responseStart;
+            }
+            *msg_id_out = theID; // Store the extracted ID
+          }
+          else
+          {
+            responseStart++; // Point to the first digit of the msg_id
+            responseStart = strchr(responseStart, ','); // Find the next comma
+          }
+
+          if (epoch != NULL) // Check if epoch is NULL
+          {
+            if (responseStart != NULL)
+            {
+              responseStart++; // Point to the first digit of the epoch
+              uint32_t theEpoch = 0;
+              char c = *responseStart;
+              while ((c != '*') && (responseStart < responseEnd)) // Stop at the asterix
+              {
+                theEpoch *= 10;
+                theEpoch += (uint32_t)(c - '0');
+                responseStart++;
+                c = *responseStart;
+              }
+
+              *epoch = theEpoch;
+            }
+          }
+        }
+        else
+          err = SWARM_M138_ERROR_ERROR;
+      }
+      else
+        err = SWARM_M138_ERROR_ERROR;
+    }
+    else
+      err = SWARM_M138_ERROR_ERROR;
+  }
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
     @brief  Return the count of all unsent messages
     @param  count
             A pointer to a uint16_t which will hold the message count
@@ -2709,7 +3448,7 @@ Swarm_M138_Error_e SWARM_M138::getUnsentMessageCount(uint16_t *count)
     responseStart += 4; // Point at the first digit of the count
 
     c = *responseStart; // Get the first digit of the count
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix
     {
       if ((c >= '0') && (c <= '9')) // Extract the count one digit at a time
       {
@@ -2720,7 +3459,15 @@ Swarm_M138_Error_e SWARM_M138::getUnsentMessageCount(uint16_t *count)
       c = *responseStart; // Get the next digit of the count
     }
 
-    *count = theCount;
+    if (c == ',') // If we hit a comma, this must be a different $MT message
+    {
+      *count = 0; // Set count to zero in case the user is not checking err
+      err = SWARM_M138_ERROR_ERROR;
+    }
+    else
+    {
+      *count = theCount;
+    }
   }
 
   swarm_m138_free_char(command);
@@ -2809,7 +3556,7 @@ Swarm_M138_Error_e SWARM_M138::deleteTxMessage(uint64_t msg_id)
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "$MT DELETED", "$MT ERR", response, _RxBuffSize, 5000UL);
+  err = sendCommandWithResponse(command, "$MT DELETED", "$MT ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_DELETE_TIMEOUT);
 
   swarm_m138_free_char(command);
   swarm_m138_free_char(fwd);
@@ -2872,7 +3619,7 @@ Swarm_M138_Error_e SWARM_M138::deleteAllTxMessages(void)
 
   sprintf(scratchpad, "$MT %d*", msgTotal); // Create the expected response
 
-  err = sendCommandWithResponse(command, scratchpad, "$MT ERR", response, _RxBuffSize, 5000UL);
+  err = sendCommandWithResponse(command, scratchpad, "$MT ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_DELETE_TIMEOUT);
 
   swarm_m138_free_char(command);
   swarm_m138_free_char(response);
@@ -2997,12 +3744,12 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
             }
           }
 
-          responseStart = strchr(responseStart, ','); // Find the first comma
+          responseStart = strchr(responseStart, ','); // Find the first comma (we know it is there)
           responseStart++; // Point to the first digit of the ASCII Hex
         }
-        else
+        else // Message does not have AI=
         {
-          responseStart = strstr(response, "$MT "); // Find the $MT again
+          responseStart = strstr(response, "$MT "); // Find the $MT again (we know it is there)
           responseStart += 4; // Point to the first digit of the ASCII Hex
         }
         
@@ -3010,7 +3757,7 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
         {
           size_t charsRead = 0;
           char c = *responseStart;
-          while ((c != ',') && (responseStart < responseEnd) && (charsRead < len)) // Stop at the first comma
+          while ((c != ',') && (responseStart < responseEnd) && (charsRead < len)) // Stop at the next comma
           {
             asciiHex[charsRead] = c; // Copy the char into asciiHex
             responseStart++; // Increment the pointer
@@ -3064,13 +3811,16 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
             Call getUnsentMessageCount first so you know how many IDs to expect and allocate storage for them.
             Listing all the messages through the backlog could blow up the memory,
             so this function reads the returned text one byte at a time and extracts the IDs from that.
+    @param  maxCount
+            Stop after listing the IDs for this many messages
+            Set this to the size of your uint64_t array
     @return SWARM_M138_ERROR_SUCCESS if successful
             SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
             SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
             SWARM_M138_ERROR_ERROR if unsuccessful
 */
 /**************************************************************************/
-Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
+Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids, uint16_t maxCount)
 {
   char *command;
   char *response;
@@ -3080,6 +3830,11 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
   Swarm_M138_Error_e err;
   uint16_t msgTotal = 0, msgCount = 0;
 
+  if (maxCount == 0) // Quit if maxCount is zero. It must be at least one.
+    return (SWARM_M138_ERROR_ERROR);
+
+  // Calculate the "size of" each element in the array of uint64_t
+  // Note: sizeof(uint64_t) doesn't seem to give the correct result?
   uint64_t test[2];
   size_t sizeOfUint64Array = &test[1] - &test[0];
 
@@ -3099,7 +3854,7 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
     _debugPort->println(msgTotal);
   }
 
-  if (msgTotal == 0)
+  if (msgTotal == 0) // Quit if there are no messages in the buffer
     return (SWARM_M138_ERROR_ERROR);
 
   // Allocate memory for the response
@@ -3129,12 +3884,13 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
 
   sendCommand(command); // Send the command
 
-  swarm_m138_free_char(command);
+  swarm_m138_free_char(command); // Free command now - we are done with it
 
   unsigned long startTime = millis();
   bool keepGoing = true;
 
-  while ((millis() < (startTime + 2000)) && keepGoing) // Keep checking incoming chars for up to 2 seconds
+  // Keep checking incoming chars for up to SWARM_M138_MESSAGE_ID_TIMEOUT secs total
+  while ((millis() < (startTime + SWARM_M138_MESSAGE_ID_TIMEOUT)) && keepGoing)
   {
     int hwAvail = hwAvailable();
 
@@ -3154,36 +3910,37 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
           char cc[2];
           cc[0] = rxBuff[i];
           cc[1] = 0;
-          strcat(response, cc); // Copy a single character into response
-          if (cc[0] == '\n') // Check if this is a newline
+          if (strlen(response) < _RxBuffSize) // Check if response is full
           {
-            idStart = strstr(response, "$MT "); // Check for $MT
-            if (idStart != NULL)
+            strcat(response, cc); // Copy a single character into response
+            if (cc[0] == '\n') // Check if this is a newline
             {
-              idStart = strstr(idStart, " AI="); // Check if the message has AI= at the start
+              idStart = strstr(response, "$MT "); // Check for $MT
               if (idStart != NULL)
               {
-                idStart = strchr(idStart, ','); // Find the first comma
-                if (idStart != NULL)
-                {
-                  idStart++;
-                  idStart = strchr(idStart, ','); // Find the second comma
-                }
-              }
-              else
-              {
-                idStart = strstr(response, "$MT "); // Find the $MT again
+                idStart = strstr(idStart, " AI="); // Check if the message has AI= at the start
                 if (idStart != NULL)
                 {
                   idStart = strchr(idStart, ','); // Find the first comma
+                  if (idStart != NULL)
+                  {
+                    idStart++;
+                    idStart = strchr(idStart, ','); // Find the second comma
+                  }
                 }
-              }
-              
-              if (idStart != NULL)
-              {
-                idStart++; // Point to the first digit of the message ID
-                idEnd = strchr(idStart, ','); // Find the second/third comma
+                else // Message does not have AI=
                 {
+                  idStart = strstr(response, "$MT "); // Find the $MT again
+                  if (idStart != NULL)
+                  {
+                    idStart = strchr(idStart, ','); // Find the first comma
+                  }
+                }
+                
+                if (idStart != NULL)
+                {
+                  idStart++; // Point to the first digit of the message ID
+                  idEnd = strchr(idStart, ','); // Find the second/third comma
                   if (idEnd != NULL)
                   {
                     // We have (hopefully) a valid ID to extract
@@ -3191,8 +3948,8 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
                     char c = *idStart;
                     while ((c != ',') && (idStart < idEnd))
                     {
-                      if (_printDebug == true)
-                        _debugPort->write(c);
+                      // if (_printDebug == true)
+                      //   _debugPort->write(c);
                       theID *= 10;
                       theID += (uint64_t)(c - '0');
                       idStart++;
@@ -3206,27 +3963,38 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids)
                       _debugPort->print(F("listTxMessagesIDs: msgCount is "));
                       _debugPort->println(msgCount);
                     }
-                    if (msgCount == msgTotal)
-                      keepGoing = false; // Stop if we have reached msgTotal
+                    if ((msgCount == msgTotal) || (msgCount == maxCount))
+                      keepGoing = false; // Stop if we have reached msgTotal or maxCount
                   }
                 }
               }
-            }
-            else
-            {
-              // We got a \n but failed to find $MT.
-              // So, let's be nice and copy whatever this message is into the backlog.
-              size_t backlogLength = strlen((const char *)_swarmBacklog);
-              size_t msgLen = strlen((const char *)response);
-              if ((backlogLength + msgLen) < _RxBuffSize)
+              else
               {
-                memcpy(&_swarmBacklog[backlogLength], response, msgLen);
+                // We got a \n but failed to find $MT.
+                // So, let's be nice and copy whatever this message is into the backlog if possible
+                size_t backlogLength = strlen((const char *)_swarmBacklog);
+                size_t msgLen = strlen((const char *)response);
+                if ((backlogLength + msgLen) < _RxBuffSize)
+                {
+                  memcpy(&_swarmBacklog[backlogLength], response, msgLen);
+                }
               }
+              memset(response, 0, _RxBuffSize); // Clear the response
             }
-            memset(response, 0, _RxBuffSize); // Clear the response
+          }
+          else // Response is full... We are stuck... And we are still in the for loop...
+          {
+            swarm_m138_free_char(rxBuff);
+            swarm_m138_free_char(response);
+            return (SWARM_M138_ERROR_ERROR);
           }
         }
         swarm_m138_free_char(rxBuff); // Free the buffer
+      }
+      else // The memory allocation failed
+      {
+        err = SWARM_M138_ERROR_MEM_ALLOC;
+        keepGoing = false;
       }
     }
   }
@@ -4003,6 +4771,10 @@ void SWARM_M138::addChecksumLF(char *command)
 
   if (asterix == NULL) // Return now if the * was not found
     return;
+
+  // Check for a second asterix ($MM C=**)
+  if (*(asterix + 1) == '*')
+    asterix++;
 
   char checksum = 0;
 

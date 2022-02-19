@@ -1,16 +1,17 @@
 /*!
- * @file Example16_txMessageManagement.ino
+ * @file Example17_rxMessageManagement.ino
  * 
  * @mainpage SparkFun Swarm Satellite Arduino Library
  * 
  * @section intro_sec Examples
  * 
  * This example shows how to:
- *   Queue a new text message for transmission
- *   List the IDs of all unsent messages
- *   List the contents of a single unsent message
- *   Delete a single unsent message
- *   Delete all unsent messages
+ *   Get the received message count
+ *   Delete all read messages
+ *   Delete all received messages
+ *   Mark all unread messages as read
+ *   Read the newest unread message
+ *   Read the oldest unread message
  * 
  * Want to support open source hardware? Buy a board from SparkFun!
  * SparkX Swarm Serial Breakout : https://www.sparkfun.com/products/19236
@@ -53,50 +54,6 @@ void setup()
     while (1)
       ;
   }
-
-  // Get the number of untransmitted messages
-  uint16_t count;
-  mySwarm.getUnsentMessageCount(&count);
-  Serial.print(F("There are "));
-  Serial.print(count);
-  Serial.println(F(" unsent messages in the TX queue"));
-  Serial.println();
-
-  if (count == 0) // If the queue is empty, add four new messages for transmission
-  {
-    Serial.println(F("Adding four new ones:"));
-
-    // Queue four messages
-    uint64_t id;
-    const char one[] = "One, ";
-    const char two[] = "Two, ";
-    const char three[] = "Three, ";
-    const char four[] = "Four!";
-    if (mySwarm.transmitText(one, &id) == SWARM_M138_SUCCESS)
-    {
-      Serial.print(F("Message one has been added to the transmit queue. The message ID is "));
-      serialPrintUint64_t(id);
-      Serial.println();
-    }
-    if (mySwarm.transmitText(two, &id) == SWARM_M138_SUCCESS)
-    {
-      Serial.print(F("Message two has been added to the transmit queue. The message ID is "));
-      serialPrintUint64_t(id);
-      Serial.println();
-    }
-    if (mySwarm.transmitText(three, &id) == SWARM_M138_SUCCESS)
-    {
-      Serial.print(F("Message three has been added to the transmit queue. The message ID is "));
-      serialPrintUint64_t(id);
-      Serial.println();
-    }
-    if (mySwarm.transmitText(four, &id) == SWARM_M138_SUCCESS)
-    {
-      Serial.print(F("Message four has been added to the transmit queue. The message ID is "));
-      serialPrintUint64_t(id);
-      Serial.println();
-    }
-  }
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -108,65 +65,77 @@ void loop()
   
   // Print a menu of the messages in the transmit queue
   Serial.println();
-  Serial.println(F("Swarm TX Message Management"));
+  Serial.println(F("Swarm RX Message Management"));
   Serial.println();
   
-  uint16_t count;
-  mySwarm.getUnsentMessageCount(&count); // Get the number of untransmitted messages
+  uint16_t totalCount;
+  mySwarm.getRxMessageCount(&totalCount); // Get the total number of received messages (read and unread)
 
   Serial.print(F("There are "));
-  Serial.print(count);
-  Serial.println(F(" messages in the TX queue"));
+  Serial.print(totalCount);
+  Serial.print(F(" received messages of which "));
+
+  uint16_t unreadCount;
+  mySwarm.getRxMessageCount(&unreadCount, true); // Get the number of unread messages
+  
+  Serial.print(unreadCount);
+  Serial.println(F(" are unread"));
   Serial.println();
 
-  if (count > 0)
+  if (totalCount > 0)
   {
-    if (count > 10)
-    {
-      count = 10; // Limit the menu to the first ten messages
-      Serial.println(F("The first 10 messages are:"));
-    }
-    else
-      Serial.println(F("The messages are:"));
-
-    uint64_t *ids = new uint64_t[count]; // Create an array of uint64_t to store the message IDs
-    mySwarm.listTxMessagesIDs(ids, count); // Ask the modem for a list of the IDs
-  
-    for (uint16_t i = 0; i < count; i++) // Print all the message IDs
-    {
-      Serial.print(i);
-      Serial.print(F(" : "));
-      serialPrintUint64_t(ids[i]);
-      Serial.println();
-    }
-  
-    Serial.println();
     Serial.println(F("Enter:"));
-    Serial.println(F("L followed by the message number to list a message. E.g. L1"));
-    Serial.println(F("D followed by the message number to delete a message. E.g. D0"));
-    Serial.println(F("A to delete all messages"));
+    Serial.println(F("d to delete all read messages"));
+    Serial.println(F("D to delete all messages (read and unread)"));
+    Serial.println(F("M to mark all messages as read"));
+
+    if (unreadCount > 0)
+    {
+      Serial.println(F("N to read the newest unread message"));
+      Serial.println(F("O to read the oldest unread message"));      
+    }
     
     while (!Serial.available()) // Wait for the user to enter a character
       ;
   
     char c = Serial.read(); // Read the serial character
+
+    Swarm_M138_Error_e err;
   
-    if (c == 'L') // List a message
+    if (c == 'd') // Delete read messages
     {
-      while (!Serial.available()) // Wait for the user to enter the message number
-        ;
-      c = Serial.read(); // Read the serial character
-      if ((c >= '0') && (c < ('0' + count)) && (c <= '9')) // Check for a valid number
+      err = mySwarm.deleteAllRxMessages(true);
+    }
+    
+    else if (c == 'D') // Delete all messages
+    {
+      err = mySwarm.deleteAllRxMessages(false);
+    }
+  
+    else if (c == 'M') // Mark all messages as read
+    {
+      err = mySwarm.markAllRxMessages();
+    }
+  
+    else if ((c == 'N') || (c == 'O')) // Read a message
+    {
+      // Allocate storage for the message. The message could be up to 2 * 192 bytes long. Include space for a null on the end.
+      char *asciiHex = new char[385];
+      uint32_t epoch;
+      uint16_t appID;
+      uint64_t msg_id;
+
+      if (c == 'N')
+        err = mySwarm.readNewestMessage(asciiHex, 385, &msg_id, &epoch, &appID); // Read the message
+      else
+        err = mySwarm.readOldestMessage(asciiHex, 385, &msg_id, &epoch, &appID); // Read the message
+
+      if (err == SWARM_M138_SUCCESS) // If the read was successful, print the message
       {
-        // Allocate storage for the message. The message could be up to 2 * 192 bytes long. Include space for a null on the end.
-        char *asciiHex = new char[385];
-        uint32_t epoch;
-        uint16_t appID;
-        mySwarm.listTxMessage(ids[c - '0'], asciiHex, 385, &epoch, &appID); // List the message
         Serial.println();
         Serial.print(F("Message contents in ASCII Hex: "));
         Serial.println(asciiHex); // Print the message contents in ASCII Hex
-
+  
         // Convert the ASCII Hex into chars and print if printable
         Serial.print(F("Message contents (if printable): "));
         for (size_t i = 0; i < strlen(asciiHex); i+= 2)
@@ -181,34 +150,43 @@ void loop()
             Serial.write(cc);
         }
         Serial.println();
-
-        Serial.print(F("Message epoch: "));
+  
+        Serial.print(F("Message ID: "));
+        serialPrintUint64_t(msg_id);
+        Serial.print(F("  Message epoch: "));
         Serial.print(epoch);
         Serial.print(F("  Message appID: "));
         Serial.println(appID);
         Serial.println();
-        
-        delete[] asciiHex; // Delete the char storage
       }
+      
+      delete[] asciiHex; // Delete the char storage
     }
-    
-    else if (c == 'D') // Delete a message
+
+    if ((c == 'd') || (c == 'D') || (c == 'M') || (c == 'N') || (c == 'O'))
     {
-      while (!Serial.available()) // Wait for the user to enter the message number
-        ;
-      c = Serial.read(); // Read the serial character
-      if ((c >= '0') && (c < ('0' + count)) && (c <= '9')) // Check for a valid number
+      // Print the result
+      if (err == SWARM_M138_SUCCESS)
       {
-        mySwarm.deleteTxMessage(ids[c - '0']); // Delete the message
+        Serial.println(F("The command was successful"));
       }
+      else
+      {
+        Serial.print(F("Swarm error: "));
+        Serial.print((int)err);
+        Serial.print(F(" : "));
+        Serial.print(mySwarm.modemErrorString(err)); // Convert the error into printable text
+        if (err == SWARM_M138_ERROR_ERR) // If we received a command error (ERR), print it
+        {
+          Serial.print(F(" : "));
+          Serial.print(mySwarm.commandError); 
+          Serial.print(F(" : "));
+          Serial.println(mySwarm.commandErrorString((const char *)mySwarm.commandError)); 
+        }
+        else
+          Serial.println();
+      }      
     }
-    
-    else if (c == 'A') // Delete all messages
-    {
-      mySwarm.deleteAllTxMessages();
-    }
-  
-    delete[] ids; // Delete the ID storage
   }
   else
   {

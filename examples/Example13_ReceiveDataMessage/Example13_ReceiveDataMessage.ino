@@ -6,6 +6,7 @@
  * @section intro_sec Examples
  * 
  * This example shows how to:
+ *   Enable message notifications
  *   Set up a callback for the unsolicited $RD receive data messages
  *   Print the messages from the callback
  * 
@@ -90,6 +91,23 @@ void setup()
 
   // Set up the callback for the unsolicited $RD messages. Call printDataMsg when a new message arrives
   mySwarm.setReceiveMessageCallback(&printDataMsg);
+
+  // Enable message notifications
+  mySwarm.setMessageNotifications(true);
+
+  // Check if message notifications are enabled
+  bool enabled;
+  if (mySwarm.getMessageNotifications(&enabled) == SWARM_M138_SUCCESS)
+  {
+    Serial.print(F("Message notifications are "));
+    if (!enabled)
+      Serial.print(F("not "));
+    Serial.println(F("enabled"));
+  }
+  else
+  {
+    Serial.println(F("Swarm communication error"));
+  }
 
   Serial.println(F("Waiting for a new data message..."));
 }
