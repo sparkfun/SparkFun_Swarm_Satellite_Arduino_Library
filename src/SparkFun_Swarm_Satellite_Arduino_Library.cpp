@@ -255,7 +255,7 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
     // strtok will convert any delimiters it finds ("\n" in our case) into NULL characters.
     // Also, be very careful that you do not use strtok within an strtok while loop.
     // The next call of strtok(NULL, ...) in the outer loop will use the pointer saved from the inner loop!
-    // In our case, strtok is also used in pruneBacklog, which is called by waitForRespone or sendCommandWithResponse,
+    // In our case, strtok is also used in pruneBacklog, which is called by waitForResponse or sendCommandWithResponse,
     // which is called by the parse functions called by processURCEvent...
     // The solution is to use strtok_r - the reentrant version of strtok
 
@@ -3529,7 +3529,7 @@ Swarm_M138_Error_e SWARM_M138::getUnsentMessageCount(uint16_t *count)
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "$MT ", "$MT ERR", response, _RxBuffSize);
+  err = sendCommandWithResponse(command, "$MT ", "$MT ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
 
   if (err == SWARM_M138_ERROR_SUCCESS)
   {
@@ -3821,7 +3821,7 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "$MT ", "$MT ERR", response, _RxBuffSize);
+  err = sendCommandWithResponse(command, "$MT ", "$MT ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_READ_TIMEOUT);
 
   if (err == SWARM_M138_ERROR_SUCCESS)
   {
@@ -4321,7 +4321,7 @@ Swarm_M138_Error_e SWARM_M138::transmitText(const char *data, uint64_t *msg_id, 
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "$TD OK,", "$TD ERR", response, _RxBuffSize);
+  err = sendCommandWithResponse(command, "$TD OK,", "$TD ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_TRANSMIT_TIMEOUT);
 
   if (err == SWARM_M138_ERROR_SUCCESS) // Check if we got $TD OK
   {
@@ -4580,7 +4580,7 @@ Swarm_M138_Error_e SWARM_M138::transmitBinary(const uint8_t *data, size_t len, u
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "$TD OK,", "$TD ERR", response, _RxBuffSize);
+  err = sendCommandWithResponse(command, "$TD OK,", "$TD ERR", response, _RxBuffSize, SWARM_M138_MESSAGE_TRANSMIT_TIMEOUT);
 
   if (err == SWARM_M138_ERROR_SUCCESS) // Check if we got $TD OK
   {

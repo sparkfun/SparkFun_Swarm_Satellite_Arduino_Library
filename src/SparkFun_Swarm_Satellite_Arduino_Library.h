@@ -78,6 +78,7 @@
 #define SWARM_M138_MESSAGE_DELETE_TIMEOUT 5000    ///< Allow extra time when deleting a message
 #define SWARM_M138_MESSAGE_ID_TIMEOUT 5000        ///< Allow extra time when reading the message IDs
 #define SWARM_M138_MESSAGE_READ_TIMEOUT 3000      ///< Allow extra time when reading a message
+#define SWARM_M138_MESSAGE_TRANSMIT_TIMEOUT 3000  ///< Allow extra time when queueing a message for transmission
 
 /** Modem Serial Baud Rate */
 #define SWARM_M138_SERIAL_BAUD_RATE 115200 ///< The modem serial baud rate is 115200 and cannot be changed

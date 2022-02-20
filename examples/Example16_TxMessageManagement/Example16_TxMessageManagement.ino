@@ -147,7 +147,7 @@ void loop()
     Serial.println(F("A to delete all messages"));
     
     while (!Serial.available()) // Wait for the user to enter a character
-      ;
+      mySwarm.checkUnsolicitedMsg(); // Keep emptying the backlog
   
     char c = Serial.read(); // Read the serial character
   
@@ -213,7 +213,7 @@ void loop()
   else
   {
     while (!Serial.available()) // Wait for the user to enter something
-      ;    
+      mySwarm.checkUnsolicitedMsg(); // Keep emptying the backlog
   }
 }
 

@@ -88,15 +88,11 @@ void loop()
     Serial.println(F("d to delete all read messages"));
     Serial.println(F("D to delete all messages (read and unread)"));
     Serial.println(F("M to mark all messages as read"));
-
-    if (unreadCount > 0)
-    {
-      Serial.println(F("N to read the newest unread message"));
-      Serial.println(F("O to read the oldest unread message"));      
-    }
+    Serial.println(F("N to read the newest unread message"));
+    Serial.println(F("O to read the oldest unread message"));      
     
     while (!Serial.available()) // Wait for the user to enter a character
-      ;
+      mySwarm.checkUnsolicitedMsg(); // Keep emptying the backlog
   
     char c = Serial.read(); // Read the serial character
 
@@ -191,7 +187,7 @@ void loop()
   else
   {
     while (!Serial.available()) // Wait for the user to enter something
-      ;    
+      mySwarm.checkUnsolicitedMsg(); // Keep emptying the backlog
   }
 }
 
