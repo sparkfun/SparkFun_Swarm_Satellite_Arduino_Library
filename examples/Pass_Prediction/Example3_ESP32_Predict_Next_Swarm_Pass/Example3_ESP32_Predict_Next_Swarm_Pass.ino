@@ -32,7 +32,7 @@
 
 */
 
-#include <Sgp4.h>
+#include <Sgp4.h> //Click here to get the library: http://librarymanager/All#SparkFun_SGP4_Arduino_Library
 
 Sgp4 sat;
 
