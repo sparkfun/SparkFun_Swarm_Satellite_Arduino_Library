@@ -25,7 +25,7 @@
 
 #include "SparkFun_Swarm_Satellite_Arduino_Library.h"
 
-SWARM_M138::SWARM_M138(int gpio1Pin)
+SWARM_M138::SWARM_M138(void)
 {
 #ifdef SWARM_M138_SOFTWARE_SERIAL_ENABLED
   _softSerial = NULL;
@@ -36,9 +36,7 @@ SWARM_M138::SWARM_M138(int gpio1Pin)
   _address = SFE_QWIIC_SWARM_DEFAULT_I2C_ADDRESS;
   _debugPort = NULL;
   _printDebug = false;
-  _gpio1Pin = gpio1Pin;
   _checkUnsolicitedMsgReentrant = false;
-  _swarmDateTimeCallback = NULL;
   _lastI2cCheck = millis();
 
   _swarmDateTimeCallback = NULL;
@@ -158,6 +156,7 @@ bool SWARM_M138::initializeBuffers()
   {
     if (_printDebug == true)
       _debugPort->println(F("begin: not enough memory for commandError!"));
+    swarm_m138_free_char(_swarmBacklog);
     return false;
   }
   memset(commandError, 0, SWARM_M138_MAX_CMD_ERROR_LEN);
@@ -245,6 +244,8 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
         avail += hwReadChars((char *)&_swarmRxBuffer[avail], hwAvail);
         timeIn = millis();
       }
+      else
+        delay(1);
       hwAvail = hwAvailable();
     }
 
@@ -421,17 +422,25 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
           if (eventEnd >= (eventStart + 10)) // Check we have enough data
           {
             // Extract the geospatial info
-            float lat, lon, alt, course, speed;
+            int latH, lonH, alt, course, speed;
+            char latL[8], lonL[8];
 
-            int ret = sscanf(eventStart, "$GN %f,%f,%f,%f,%f*", &lat, &lon, &alt, &course, &speed);
+            int ret = sscanf(eventStart, "$GN %d.%[^,],%d.%[^,],%d,%d,%d*",
+                             &latH, latL, &lonH, lonL, &alt, &course, &speed);
 
-            if (ret == 5)
+            if (ret == 7)
             {
-              info->lat = lat;
-              info->lon = lon;
-              info->alt = alt;
-              info->course = course;
-              info->speed = speed;
+              if (latH >= 0)
+                info->lat = (float)latH + ((float)atol(latL) / pow(10, strlen(latL)));
+              else
+                info->lat = (float)latH - ((float)atol(latL) / pow(10, strlen(latL)));
+              if (lonH >= 0)
+                info->lon = (float)lonH + ((float)atol(lonL) / pow(10, strlen(lonL)));
+              else
+                info->lon = (float)lonH - ((float)atol(lonL) / pow(10, strlen(lonL)));
+              info->alt = (float)alt;
+              info->course = (float)course;
+              info->speed = (float)speed;
 
               if (_swarmGeospatialCallback != NULL)
               {
@@ -525,17 +534,36 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
           if (eventEnd >= (eventStart + 10)) // Check we have enough data
           {
             // Extract the power status
-            float unused1, unused2, unused3, unused4, temp;
+            int unused1H, unused2H, unused3H, unused4H, tempH;
+            char unused1L[8], unused2L[8], unused3L[8], unused4L[8], tempL[8];
 
-            int ret = sscanf(eventStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
+            int ret = sscanf(eventStart, "$PW %d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,]*",
+                            &unused1H, unused1L, &unused2H, unused2L,
+                            &unused3H, unused3L, &unused4H, unused4L,
+                            &tempH, tempL);
 
-            if (ret == 5)
+            if (ret == 10)
             {
-              powerStatus->unused1 = unused1;
-              powerStatus->unused2 = unused2;
-              powerStatus->unused3 = unused3;
-              powerStatus->unused4 = unused4;
-              powerStatus->temp = temp;
+              if (unused1H >= 0)
+                powerStatus->unused1 = (float)unused1H + ((float)atol(unused1L) / pow(10, strlen(unused1L)));
+              else
+                powerStatus->unused1 = (float)unused1H - ((float)atol(unused1L) / pow(10, strlen(unused1L)));
+              if (unused2H >= 0)
+                powerStatus->unused2 = (float)unused2H + ((float)atol(unused2L) / pow(10, strlen(unused2L)));
+              else
+                powerStatus->unused2 = (float)unused2H - ((float)atol(unused2L) / pow(10, strlen(unused2L)));
+              if (unused3H >= 0)
+                powerStatus->unused3 = (float)unused3H + ((float)atol(unused3L) / pow(10, strlen(unused3L)));
+              else
+                powerStatus->unused3 = (float)unused3H - ((float)atol(unused3L) / pow(10, strlen(unused3L)));
+              if (unused4H >= 0)
+                powerStatus->unused4 = (float)unused4H + ((float)atol(unused4L) / pow(10, strlen(unused4L)));
+              else
+                powerStatus->unused4 = (float)unused4H - ((float)atol(unused4L) / pow(10, strlen(unused4L)));
+              if (tempH >= 0)
+                powerStatus->temp = (float)tempH + ((float)atol(tempL) / pow(10, strlen(tempL)));
+              else
+                powerStatus->temp = (float)tempH - ((float)atol(tempL) / pow(10, strlen(tempL)));
 
               if (_swarmPowerStatusCallback != NULL)
               {
@@ -1176,7 +1204,7 @@ Swarm_M138_Error_e SWARM_M138::getDateTimeRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -1187,7 +1215,10 @@ Swarm_M138_Error_e SWARM_M138::getDateTimeRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited dateTime message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -1432,7 +1463,7 @@ Swarm_M138_Error_e SWARM_M138::getGpsJammingIndicationRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -1443,7 +1474,10 @@ Swarm_M138_Error_e SWARM_M138::getGpsJammingIndicationRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited jamming message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -1551,22 +1585,30 @@ Swarm_M138_Error_e SWARM_M138::getGeospatialInfo(Swarm_M138_GeospatialData_t *in
     }
 
     // Extract the geospatial info
-    float lat, lon, alt, course, speed;
+    int latH, lonH, alt, course, speed;
+    char latL[8], lonL[8];
 
-    int ret = sscanf(responseStart, "$GN %f,%f,%f,%f,%f*", &lat, &lon, &alt, &course, &speed);
+    int ret = sscanf(responseStart, "$GN %d.%[^,],%d.%[^,],%d,%d,%d*",
+                     &latH, latL, &lonH, lonL, &alt, &course, &speed);
 
-    if (ret < 5)
+    if (ret < 7)
     {
       swarm_m138_free_char(command);
       swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
 
-    info->lat = lat;
-    info->lon = lon;
-    info->alt = alt;
-    info->course = course;
-    info->speed = speed;
+    if (latH >= 0)
+      info->lat = (float)latH + ((float)atol(latL) / pow(10, strlen(latL)));
+    else
+      info->lat = (float)latH - ((float)atol(latL) / pow(10, strlen(latL)));
+    if (lonH >= 0)
+      info->lon = (float)lonH + ((float)atol(lonL) / pow(10, strlen(lonL)));
+    else
+      info->lon = (float)lonH - ((float)atol(lonL) / pow(10, strlen(lonL)));
+    info->alt = (float)alt;
+    info->course = (float)course;
+    info->speed = (float)speed;
   }
 
   swarm_m138_free_char(command);
@@ -1628,7 +1670,7 @@ Swarm_M138_Error_e SWARM_M138::getGeospatialInfoRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -1639,7 +1681,10 @@ Swarm_M138_Error_e SWARM_M138::getGeospatialInfoRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited geo message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -1955,7 +2000,7 @@ Swarm_M138_Error_e SWARM_M138::getGpsFixQualityRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -1966,7 +2011,10 @@ Swarm_M138_Error_e SWARM_M138::getGpsFixQualityRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited fix message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -2112,22 +2160,41 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatus(Swarm_M138_Power_Status_t *powerSt
     }
 
     // Extract the power status
-    float unused1, unused2, unused3, unused4, temp;
+    int unused1H, unused2H, unused3H, unused4H, tempH;
+    char unused1L[8], unused2L[8], unused3L[8], unused4L[8], tempL[8];
 
-    int ret = sscanf(responseStart, "$PW %f,%f,%f,%f,%f*", &unused1, &unused2, &unused3, &unused4, &temp);
+    int ret = sscanf(responseStart, "$PW %d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,]*",
+                     &unused1H, unused1L, &unused2H, unused2L,
+                     &unused3H, unused3L, &unused4H, unused4L,
+                     &tempH, tempL);
 
-    if (ret < 5)
+    if (ret < 10)
     {
       swarm_m138_free_char(command);
       swarm_m138_free_char(response);
       return (SWARM_M138_ERROR_ERROR);
     }
 
-    powerStatus->unused1 = unused1;
-    powerStatus->unused2 = unused2;
-    powerStatus->unused3 = unused3;
-    powerStatus->unused4 = unused4;
-    powerStatus->temp = temp;
+    if (unused1H >= 0)
+      powerStatus->unused1 = (float)unused1H + ((float)atol(unused1L) / pow(10, strlen(unused1L)));
+    else
+      powerStatus->unused1 = (float)unused1H - ((float)atol(unused1L) / pow(10, strlen(unused1L)));
+    if (unused2H >= 0)
+      powerStatus->unused2 = (float)unused2H + ((float)atol(unused2L) / pow(10, strlen(unused2L)));
+    else
+      powerStatus->unused2 = (float)unused2H - ((float)atol(unused2L) / pow(10, strlen(unused2L)));
+    if (unused3H >= 0)
+      powerStatus->unused3 = (float)unused3H + ((float)atol(unused3L) / pow(10, strlen(unused3L)));
+    else
+      powerStatus->unused3 = (float)unused3H - ((float)atol(unused3L) / pow(10, strlen(unused3L)));
+    if (unused4H >= 0)
+      powerStatus->unused4 = (float)unused4H + ((float)atol(unused4L) / pow(10, strlen(unused4L)));
+    else
+      powerStatus->unused4 = (float)unused4H - ((float)atol(unused4L) / pow(10, strlen(unused4L)));
+    if (tempH >= 0)
+      powerStatus->temp = (float)tempH + ((float)atol(tempL) / pow(10, strlen(tempL)));
+    else
+      powerStatus->temp = (float)tempH - ((float)atol(tempL) / pow(10, strlen(tempL)));
   }
 
   swarm_m138_free_char(command);
@@ -2189,7 +2256,7 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatusRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -2200,7 +2267,10 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatusRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited power message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -2482,7 +2552,7 @@ Swarm_M138_Error_e SWARM_M138::getReceiveTestRate(uint32_t *rate)
     responseStart += 4; // Point at the first digit of the rate
 
     c = *responseStart; // Get the first digit of the rate
-    while (c != '*') // Keep going until we hit the asterix
+    while ((c != '*') && (c != ',')) // Keep going until we hit the asterix or a comma
     {
       if ((c >= '0') && (c <= '9')) // Extract the rate one digit at a time
       {
@@ -2493,7 +2563,10 @@ Swarm_M138_Error_e SWARM_M138::getReceiveTestRate(uint32_t *rate)
       c = *responseStart; // Get the next digit of the rate
     }
 
-    *rate = theRate;
+    if (c == ',') // If we hit a comma then this is an unsolicited RT message, not the rate
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
+    else
+      *rate = theRate;
   }
 
   swarm_m138_free_char(command);
@@ -2757,7 +2830,7 @@ Swarm_M138_Error_e SWARM_M138::getRxMessageCount(uint16_t *count, bool unread)
     if (c == ',') // If we hit a comma, this must be a different $MM message
     {
       *count = 0; // Set count to zero in case the user is not checking err
-      err = SWARM_M138_ERROR_ERROR;
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
     }
     else
     {
@@ -3490,7 +3563,7 @@ Swarm_M138_Error_e SWARM_M138::getUnsentMessageCount(uint16_t *count)
     if (c == ',') // If we hit a comma, this must be a different $MT message
     {
       *count = 0; // Set count to zero in case the user is not checking err
-      err = SWARM_M138_ERROR_ERROR;
+      err = SWARM_M138_ERROR_INVALID_FORMAT;
     }
     else
     {
@@ -3815,7 +3888,7 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
           }
         }
         else
-          err = SWARM_M138_ERROR_ERROR;
+          err = SWARM_M138_ERROR_INVALID_FORMAT;
       }
       else
         err = SWARM_M138_ERROR_ERROR;
@@ -4025,6 +4098,8 @@ Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids, uint16_t maxCoun
         keepGoing = false;
       }
     }
+    else
+      delay(1);
   }
 
   swarm_m138_free_char(response);
@@ -4769,9 +4844,9 @@ const char *SWARM_M138::commandErrorString(const char *ERR)
 {
   if (strstr(ERR, "BADPARAM") != NULL)
     return "Invalid command or argument";
-  if (strstr(ERR, "DBXINVMSGID") != NULL)
+  if (strstr(ERR, "DBX_INVMSGID") != NULL)
     return "Messages Management : invalid message ID";
-  if (strstr(ERR, "DBXNOMORE") != NULL)
+  if (strstr(ERR, "DBX_NOMORE") != NULL)
     return "Messages Management : no messages found";
   if (strstr(ERR, "TIMENOTSET") != NULL)
     return "Time not yet set from GPS";
@@ -4984,6 +5059,8 @@ void SWARM_M138::sendCommand(const char *command)
         backlogLength += hwReadChars((char *)&_swarmBacklog[backlogLength], hwAvail);
         timeIn = millis();
       }
+      else
+        delay(1);
       hwAvail = hwAvailable();
     }
   }
@@ -5113,6 +5190,8 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
         }
       }
     }
+    else
+      delay(1);
   }
 
   if (_printDebug == true)
@@ -5121,16 +5200,7 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
 
   if (found == true)
   {
-    if (responseStartSeen) // Let success have priority
-    {
-      // if (_printDebug == true)
-      // {
-      //   _debugPort->print(F("waitForResponse: responseStart: "));
-      //   _debugPort->println((char *)&_swarmBacklog[responseStartedAt]);
-      // }
-      err = checkChecksum((char *)&_swarmBacklog[responseStartedAt]);
-    }
-    else if (errorStartSeen)
+    if (errorStartSeen) // Error needs priority over response as response is often the beginning of error!
     {
       // if (_printDebug == true)
       // {
@@ -5143,6 +5213,15 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
         extractCommandError((char *)&_swarmBacklog[errorStartedAt]);
         err = SWARM_M138_ERROR_ERR;
       }
+    }
+    else if (responseStartSeen)
+    {
+      // if (_printDebug == true)
+      // {
+      //   _debugPort->print(F("waitForResponse: responseStart: "));
+      //   _debugPort->println((char *)&_swarmBacklog[responseStartedAt]);
+      // }
+      err = checkChecksum((char *)&_swarmBacklog[responseStartedAt]);
     }
   }
   else

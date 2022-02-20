@@ -73,14 +73,11 @@
 
 #include <Wire.h> // Needed for I2C communication with Qwiic Swarm
 
-/** The number of the digital pin connected to GPIO1 can be passed to begin */
-#define SWARM_M138_GPIO1_PIN -1 ///< _GPIO1Pin will default to no pin
-
 /** Timeouts for the serial commands */
 #define SWARM_M138_STANDARD_RESPONSE_TIMEOUT 1000 ///< Standard command timeout: allow one second for the modem to respond
 #define SWARM_M138_MESSAGE_DELETE_TIMEOUT 5000    ///< Allow extra time when deleting a message
-#define SWARM_M138_MESSAGE_ID_TIMEOUT 2000        ///< Allow up to two seconds total when reading the message IDs
-#define SWARM_M138_MESSAGE_READ_TIMEOUT 2000      ///< Allow up to two seconds when reading a message
+#define SWARM_M138_MESSAGE_ID_TIMEOUT 5000        ///< Allow extra time when reading the message IDs
+#define SWARM_M138_MESSAGE_READ_TIMEOUT 3000      ///< Allow extra time when reading a message
 
 /** Modem Serial Baud Rate */
 #define SWARM_M138_SERIAL_BAUD_RATE 115200 ///< The modem serial baud rate is 115200 and cannot be changed
@@ -259,9 +256,8 @@ class SWARM_M138
 {
 public:
   // Constructor
-  // The library will use the GPIO1 pin (if provided) to (e.g.) exit sleep mode or indicate pending messages
   /** @brief Class to communicate with the Swarm M138 satellite modem */
-  SWARM_M138(int gpio1Pin = SWARM_M138_GPIO1_PIN);
+  SWARM_M138(void);
 
   /** Begin -- initialize module and ensure it's connected */
 #ifdef SWARM_M138_SOFTWARE_SERIAL_ENABLED
@@ -398,8 +394,6 @@ private:
   Stream *_debugPort; // The stream to send debug messages to if enabled. Usually Serial.
   bool _printDebug;   // Flag to print debugging variables
 
-  int _gpio1Pin; // digital pin connected to GPIO1 (if provided)
-
   bool _checkUnsolicitedMsgReentrant; // Prevent reentry of checkUnsolicitedMsg - just in case it gets called from a callback
 
 #define _RxBuffSize 512
@@ -474,10 +468,6 @@ private:
 
   char *swarm_m138_alloc_char(size_t num);
   void swarm_m138_free_char(char *freeMe);
-
-  // GPS Helper functions
-  // char *readDataUntil(char *destination, unsigned int destSize, char *source, char delimiter);
-  // bool parseGeospatial(char *geospatialString, PositionData *pos, ClockData *clk, SpeedData *spd);
 
   // UART / I2C Functions
   size_t hwPrint(const char *s);
