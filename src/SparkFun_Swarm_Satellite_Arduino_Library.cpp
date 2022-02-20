@@ -9,7 +9,7 @@
  * 
  * Want to support open source hardware? Buy a board from SparkFun!
  * <br>SparkX Swarm Serial Breakout (SPX-19236): https://www.sparkfun.com/products/19236
- *  * 
+ * 
  * @section author Author
  * 
  * This library was written by:
@@ -5494,7 +5494,8 @@ void SWARM_M138::pruneBacklog()
   if (_pruneBuffer == NULL)
   {
     if (_printDebug == true)
-      _debugPort->println(F("begin: not enough memory for _pruneBuffer!"));
+      _debugPort->println(F("pruneBacklog: not enough memory for _pruneBuffer! Clearing the backlog. Sorry!"));
+    memset(_swarmBacklog, 0, _RxBuffSize); //Clear out backlog buffer.
     return;
   }
   memset(_pruneBuffer, 0, _RxBuffSize); // Clear the _pruneBuffer
