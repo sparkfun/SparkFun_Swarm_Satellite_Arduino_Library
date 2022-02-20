@@ -22,6 +22,7 @@ If you would like to contribute to this library: please do, we truly appreciate 
 
 ## Documentation
 
+* **[Doxygen Documentation](https://sparkfun.github.io/SparkFun_Swarm_Satellite_Arduino_Library/)** - HTML documentation created with [Doxygen](https://github.com/doxygen/doxygen)
 * **[Installing an Arduino Library Guide](https://learn.sparkfun.com/tutorials/installing-an-arduino-library)** - Basic information on how to install an Arduino library.
 * **[Swarm Serial Breakout Product Repository](https://github.com/sparkfun/SparkFun_Swarm_Serial_Breakout)** - Swarm Serial Breakout repository (including hardware files).
 * **[LICENSE.md](./LICENSE.md)** - License information
