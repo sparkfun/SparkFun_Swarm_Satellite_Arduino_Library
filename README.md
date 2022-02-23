@@ -1,7 +1,7 @@
 SparkFun Swarm Satellite Arduino Library
 ==============================
 
-[![Swarm Serial Breakout]()](https://www.sparkfun.com/products/19236)
+[![Swarm Serial Breakout](https://cdn.sparkfun.com/assets/parts/1/8/8/6/3/19236-Swarm_Serial_Breakout-01.jpg)](https://www.sparkfun.com/products/19236)
 
 [*Swarm Serial Breakout*](https://www.sparkfun.com/products/19236)
 
