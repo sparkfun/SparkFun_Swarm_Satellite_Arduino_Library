@@ -398,7 +398,10 @@ private:
   bool _checkUnsolicitedMsgReentrant; // Prevent reentry of checkUnsolicitedMsg - just in case it gets called from a callback
 
 #define _RxBuffSize 512
-  const unsigned long _rxWindowMillis = 5; // Wait up to 5ms for any more serial characters to arrive
+  // Wait for this many millis for any more serial characters to arrive.
+  // On ESP32, Serial.available seems to provide an update every 120 bytes during the reception of long messages...
+  // We need to set _rxWindowMillis to slightly longer than (120 * 10 / 115200)
+  const unsigned long _rxWindowMillis = 12;
   char *_swarmBacklog;                     // Allocated in SWARM_M138::begin
 
   // Callbacks for unsolicited messages

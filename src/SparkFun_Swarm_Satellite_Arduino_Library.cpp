@@ -252,12 +252,17 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
     // _swarmRxBuffer now contains the backlog (if any) and the new serial data (if any)
 
     // A health warning about strtok:
+    //
     // strtok will convert any delimiters it finds ("\n" in our case) into NULL characters.
+    //
     // Also, be very careful that you do not use strtok within an strtok while loop.
     // The next call of strtok(NULL, ...) in the outer loop will use the pointer saved from the inner loop!
     // In our case, strtok is also used in pruneBacklog, which is called by waitForResponse or sendCommandWithResponse,
-    // which is called by the parse functions called by processURCEvent...
+    // which is called by the parse functions called by processUnsolicitedEvent...
     // The solution is to use strtok_r - the reentrant version of strtok
+    //
+    // Also, if the string does not contain any delimiters, strtok will still return a pointer to the start of the string.
+    // The entire string is considered the first token.
 
     char *preservedEvent;
     event = strtok_r(_swarmRxBuffer, "\n", &preservedEvent); // Look for an 'event' (_swarmRxBuffer contains something ending in \n)
@@ -274,17 +279,17 @@ bool SWARM_M138::checkUnsolicitedMsg(void)
         _debugPort->println(event);
       }
 
-      if (!checkChecksum(event)) // Check the checksum
-      {
-        if (_printDebug == true)
-          _debugPort->println(F("checkUnsolicitedMsg: event checksum is invalid!"));
-      }
-      else
+      if (checkChecksum(event) == SWARM_M138_ERROR_SUCCESS) // Check the checksum
       {
         //Process the event
         bool latestHandled = processUnsolicitedEvent((const char *)event);
         if (latestHandled)
           handled = true; // handled will be true if latestHandled has ever been true
+      }
+      else
+      {
+        if (_printDebug == true)
+          _debugPort->println(F("checkUnsolicitedMsg: event is invalid!"));
       }
 
       backlogLength = strlen((const char *)_swarmBacklog);
@@ -4983,13 +4988,19 @@ Swarm_M138_Error_e SWARM_M138::checkChecksum(char *startPosition)
   else if ((checksumChar >= 'A') && (checksumChar <= 'F'))
     expectedChecksum |= (checksumChar + 10 - 'A');
   else
+  {
+    if (_printDebug == true)
+    {
+      _debugPort->println(F("checkChecksum: invalid checksum char 2"));
+    }
     return (SWARM_M138_ERROR_INVALID_FORMAT);
+  }
 
   if (checksum != expectedChecksum)
   {
     if (_printDebug == true)
     {
-      _debugPort->println(F("checkChecksum: invalid checksum char 2"));
+      _debugPort->println(F("checkChecksum: invalid checksum"));
     }
     return (SWARM_M138_ERROR_INVALID_CHECKSUM);
   }
