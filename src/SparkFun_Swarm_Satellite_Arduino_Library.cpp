@@ -3248,7 +3248,7 @@ Swarm_M138_Error_e SWARM_M138::setMessageNotifications(bool enable)
   }
   memset(response, 0, _RxBuffSize); // Clear it
 
-  err = sendCommandWithResponse(command, "MM OK*", "$MM ERR", response, _RxBuffSize);
+  err = sendCommandWithResponse(command, "$MM OK*", "$MM ERR", response, _RxBuffSize);
 
   swarm_m138_free_char(command);
   swarm_m138_free_char(response);
