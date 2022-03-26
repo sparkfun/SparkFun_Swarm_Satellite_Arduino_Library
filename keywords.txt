@@ -76,6 +76,7 @@ markRxMessage	KEYWORD2
 markAllRxMessages	KEYWORD2
 getMessageNotifications	KEYWORD2
 setMessageNotifications	KEYWORD2
+listMessage	KEYWORD2
 readMessage	KEYWORD2
 readOldestMessage	KEYWORD2
 readNewestMessage	KEYWORD2

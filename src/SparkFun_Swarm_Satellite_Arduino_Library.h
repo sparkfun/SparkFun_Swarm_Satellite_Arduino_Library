@@ -343,6 +343,7 @@ public:
   Swarm_M138_Error_e markAllRxMessages(void);                                                                             // Mark all messages as read
   Swarm_M138_Error_e getMessageNotifications(bool *enabled);                                                              // Query if message notifications are enabled
   Swarm_M138_Error_e setMessageNotifications(bool enable);                                                                // Enable / disable message notifications
+  Swarm_M138_Error_e listMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL);        // List the message with ID. Does not change message state. Message contents are copied to asciiHex as ASCII Hex
   Swarm_M138_Error_e readMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL);        // Read the message with ID. Message contents are copied to asciiHex as ASCII Hex
   Swarm_M138_Error_e readOldestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
   Swarm_M138_Error_e readNewestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.

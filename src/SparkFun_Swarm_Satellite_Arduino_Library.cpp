@@ -3376,6 +3376,29 @@ Swarm_M138_Error_e SWARM_M138::setMessageNotifications(bool enable)
 
 /**************************************************************************/
 /*!
+    @brief  List the message with the specified ID. Does not change message state
+    @param  msg_id
+            The ID of the message to be listed
+    @param  asciiHex
+            A pointer to a char array to hold the message
+    @param  len
+            The maximum message length which asciiHex can hold
+    @param  epoch
+            Optional: a pointer to a uint32_t to hold the epoch at which the modem received the message
+    @param  appID
+            Optional: a pointer to a uint16_t to hold the message appID if there is one
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::listMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch, uint16_t *appID)
+{
+  return (readMessageInternal('L', msg_id, asciiHex, len, NULL, epoch, appID));
+}
+/**************************************************************************/
+/*!
     @brief  Read the message with the specified ID
     @param  msg_id
             The ID of the message to be read
@@ -3395,7 +3418,7 @@ Swarm_M138_Error_e SWARM_M138::setMessageNotifications(bool enable)
 /**************************************************************************/
 Swarm_M138_Error_e SWARM_M138::readMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch, uint16_t *appID)
 {
-  return (readMessageInternal('I', msg_id, asciiHex, len, NULL, epoch, appID));
+  return (readMessageInternal('R', msg_id, asciiHex, len, NULL, epoch, appID));
 }
 /**************************************************************************/
 /*!
@@ -3462,9 +3485,12 @@ Swarm_M138_Error_e SWARM_M138::readMessageInternal(const char mode, uint64_t msg
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_RX_MGMT) + 3 + 20 + 5); // Clear it
 
-  sprintf(command, "%s R=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
+  if (mode == 'L')
+    sprintf(command, "%s L=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
+  else
+    sprintf(command, "%s R=", SWARM_M138_COMMAND_MSG_RX_MGMT); // Copy the command
 
-  if (mode == 'I') // R=msgID
+  if ((mode == 'L') || (mode == 'R')) // L=msgID or R=msgID
   {
     // Allocate memory for the scratchpads
     fwd = swarm_m138_alloc_char(21); // Up to 20 digits plus null
@@ -3972,7 +3998,7 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
           responseStart = strchr(responseStart, ','); // Find the first comma (we know it is there)
           responseStart++; // Point to the first digit of the ASCII Hex
         }
-        else // Message does not have AI=
+        else // Message does not have AI= (Should be impossible with firmware >= v2)
         {
           responseStart = strstr(response, "$MT "); // Find the $MT again (we know it is there)
           responseStart += 4; // Point to the first digit of the ASCII Hex
