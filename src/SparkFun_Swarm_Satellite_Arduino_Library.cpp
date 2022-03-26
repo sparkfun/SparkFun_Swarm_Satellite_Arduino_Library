@@ -2844,7 +2844,7 @@ Swarm_M138_Error_e SWARM_M138::sleepMode(Swarm_M138_DateTimeData_t sleepUntil, b
     sprintf(scratchpad, "%d", sleepUntil.DD); // Add the day of month
     if (sleepUntil.DD < 10) strcat(command, "0");
     strcat(command, scratchpad);
-    strcat(command, " ");
+    strcat(command, "T");
   }
 
   sprintf(scratchpad, "%d", sleepUntil.hh); // Add the hour
