@@ -244,6 +244,7 @@ typedef enum
 typedef enum
 {
   SWARM_M138_MODEM_STATUS_BOOT_ABORT = 0, // A firmware crash occurred that caused a restart
+  SWARM_M138_MODEM_STATUS_BOOT_DEVICEID,  // Displays the device ID of the Modem
   SWARM_M138_MODEM_STATUS_BOOT_POWERON,   // Power has been applied
   SWARM_M138_MODEM_STATUS_BOOT_RUNNING,   // Boot has completed and ready to accept commands
   SWARM_M138_MODEM_STATUS_BOOT_UPDATED,   // A firmware update was performed

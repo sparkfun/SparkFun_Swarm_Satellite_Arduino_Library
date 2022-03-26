@@ -687,6 +687,11 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
               status = SWARM_M138_MODEM_STATUS_BOOT_ABORT;
               eventStart += strlen("BOOT,ABORT"); // Point at the comma (or asterix)
             }
+            else if (strstr(eventStart, "BOOT,DEVICEID") != NULL)
+            {
+              status = SWARM_M138_MODEM_STATUS_BOOT_DEVICEID;
+              eventStart += strlen("BOOT,DEVICEID"); // Point at the comma (or asterix)
+            }
             else if (strstr(eventStart, "BOOT,POWERON") != NULL)
             {
               status = SWARM_M138_MODEM_STATUS_BOOT_POWERON;
@@ -4867,6 +4872,9 @@ const char *SWARM_M138::modemStatusString(Swarm_M138_Modem_Status_e status)
   {
     case SWARM_M138_MODEM_STATUS_BOOT_ABORT:
       return "BOOT ABORT (Restart after firmware crash)";
+      break;
+    case SWARM_M138_MODEM_STATUS_BOOT_DEVICEID:
+      return "BOOT DEVICEID (Device ID of the modem)";
       break;
     case SWARM_M138_MODEM_STATUS_BOOT_POWERON:
       return "BOOT POWERON (Power has been applied)";
