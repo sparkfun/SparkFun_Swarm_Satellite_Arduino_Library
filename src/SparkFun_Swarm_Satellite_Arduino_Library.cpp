@@ -4847,8 +4847,20 @@ const char *SWARM_M138::modemErrorString(Swarm_M138_Error_e error)
 /**************************************************************************/
 const char *SWARM_M138::commandErrorString(const char *ERR)
 {
+  if (strstr(ERR, "BADPARAMLENGTH") != NULL)
+    return "A parameter has an incorrect length";
+  if (strstr(ERR, "BADPARAMVALUE") != NULL)
+    return "A parameter has a value that is out of range";
   if (strstr(ERR, "BADPARAM") != NULL)
-    return "Invalid command or argument";
+    return "Unrecognizable parameter after command";
+  if (strstr(ERR, "INVALIDCHAR") != NULL)
+    return "A parameter has an invalid character";
+  if (strstr(ERR, "NOTIMPLEMENTED") != NULL)
+    return "The command is not recognized as valid";
+  if (strstr(ERR, "PARAMMISSING") != NULL)
+    return "A required parameter is missing";
+  if (strstr(ERR, "PARAMDUPLICATE") != NULL)
+    return "A parameter has been duplicated";
   if (strstr(ERR, "DBX_INVMSGID") != NULL)
     return "Messages Management : invalid message ID";
   if (strstr(ERR, "DBX_NOMORE") != NULL)
