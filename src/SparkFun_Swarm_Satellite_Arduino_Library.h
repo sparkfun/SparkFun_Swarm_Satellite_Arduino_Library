@@ -305,6 +305,7 @@ public:
   /** GPIO1 Control */
   Swarm_M138_Error_e getGPIO1Mode(Swarm_M138_GPIO1_Mode_e *mode); // Get the GPIO1 pin mode
   Swarm_M138_Error_e setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode);  // Set the GPIO1 pin mode
+  Swarm_M138_Error_e readGPIO1voltage(float *voltage);  // Read the GPIO1 pin: mode 1 (ADC) returns a true voltage; mode 2 (INPUT) returns 0.00 for low or 3.30 for high
 
   /** GPS fix quality */
   Swarm_M138_Error_e getGpsFixQuality(Swarm_M138_GPS_Fix_Quality_t *fixQuality); // Get the most recent $GS message

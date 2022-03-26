@@ -46,6 +46,7 @@ setGeospatialInfoRate	KEYWORD2
 
 getGPIO1Mode	KEYWORD2
 setGPIO1Mode	KEYWORD2
+readGPIO1voltage	KEYWORD2
 
 getGpsFixQuality	KEYWORD2
 getGpsFixQualityRate	KEYWORD2

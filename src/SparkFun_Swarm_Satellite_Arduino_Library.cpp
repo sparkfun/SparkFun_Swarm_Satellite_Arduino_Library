@@ -1836,7 +1836,7 @@ Swarm_M138_Error_e SWARM_M138::setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode)
   if ((int)mode >= SWARM_M138_GPIO1_INVALID)
     return (SWARM_M138_ERROR_INVALID_MODE);
 
-  // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
+  // Allocate memory for the command, mode, asterix, checksum bytes, \n and \0
   command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPIO1_CONTROL) + 1 + 2 + 5);
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
@@ -1853,6 +1853,100 @@ Swarm_M138_Error_e SWARM_M138::setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode)
   memset(response, 0, _RxBuffSize); // Clear it
 
   err = sendCommandWithResponse(command, "$GP OK*", "$GP ERR", response, _RxBuffSize);
+
+  swarm_m138_free_char(command);
+  swarm_m138_free_char(response);
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Read the voltage on GPIO1 (Modes 1 and 2 only)
+    @param  voltage
+            A pointer to a float where the voltage will be stored.
+            Mode 1 (ADC) returns a true voltage.
+            Mode 2 (INPUT) returns 0.00 for low or 3.30 for high.
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_INVALID_MODE if the pin mode is invalid ("$GP Cannot read in mode")
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::readGPIO1voltage(float *voltage)
+{
+  char *command;
+  char *response;
+  char *responseStart;
+  char *responseEnd = NULL;
+  Swarm_M138_Error_e err;
+
+  // Allocate memory for the command, space, @, asterix, checksum bytes, \n and \0
+  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_GPIO1_CONTROL) + 1 + 1 + 5);
+  if (command == NULL)
+    return (SWARM_M138_ERROR_MEM_ALLOC);
+  memset(command, 0, strlen(SWARM_M138_COMMAND_GPIO1_CONTROL) + 1 + 1 + 5); // Clear it
+  sprintf(command, "%s @*", SWARM_M138_COMMAND_GPIO1_CONTROL); // Copy the command, add the @ and asterix
+  addChecksumLF(command); // Add the checksum bytes and line feed
+
+  response = swarm_m138_alloc_char(_RxBuffSize); // Allocate memory for the response
+  if (response == NULL)
+  {
+    swarm_m138_free_char(command);
+    return(SWARM_M138_ERROR_MEM_ALLOC);
+  }
+  memset(response, 0, _RxBuffSize); // Clear it
+
+  err = sendCommandWithResponse(command, "$GP ", "$GP ERR", response, _RxBuffSize);
+
+  if (err == SWARM_M138_ERROR_SUCCESS)
+  {
+    responseStart = strstr(response, "$GP ");
+    if (responseStart != NULL)
+      responseEnd = strchr(responseStart, '*'); // Stop at the asterix
+    if ((responseStart == NULL) || (responseEnd == NULL) || (responseEnd < (responseStart + 5))) // Check we have enough data
+    {
+      swarm_m138_free_char(command);
+      swarm_m138_free_char(response);
+      return (SWARM_M138_ERROR_ERROR);
+    }
+
+    // Parse the H/L (mode 2) or the voltage (mode 1)
+    float volts = -10.00;
+
+    char *highLow = strstr(responseStart, "$GP L*");
+
+    if (highLow != NULL)
+    {
+      volts = 0.00;
+    }
+    else
+    {
+      highLow = strstr(responseStart, "$GP H*");
+
+      if (highLow != NULL)
+      {
+        volts = 3.30;
+      }
+      else
+      {
+        int volt;
+        char mVolt[5];
+
+        int ret = sscanf(responseStart, "$GP %d.%[^,]V*", &volt, mVolt);
+
+        if (ret == 2)
+        {
+          volts = (float)volt;
+          volts += (float)atol(mVolt) / pow(10, strlen(mVolt)); // Assumes voltage is always +ve!
+        }
+      }
+    }
+
+    if (volts >= 0.0)
+      *voltage = volts;
+    else
+      err = SWARM_M138_ERROR_INVALID_MODE;
+  }
 
   swarm_m138_free_char(command);
   swarm_m138_free_char(response);
