@@ -4311,7 +4311,7 @@ Swarm_M138_Error_e SWARM_M138::transmitText(const char *data, uint64_t *msg_id, 
     @param  msg_id
             A pointer to a uint64_t which will hold the assigned message ID
     @param  hold
-            The hold duration in seconds: 60 to 31536000 (one year)
+            The hold duration in seconds: 60 to 34819200 (13 months)
             The message expires if it has not been transmitted within the hold duration
             The default hold duration is 172800 seconds (48 hours)
     @return SWARM_M138_ERROR_SUCCESS if successful
@@ -4333,7 +4333,7 @@ Swarm_M138_Error_e SWARM_M138::transmitTextHold(const char *data, uint64_t *msg_
     @param  msg_id
             A pointer to a uint64_t which will hold the assigned message ID
     @param  hold
-            The hold duration in seconds: 60 to 31536000 (one year)
+            The hold duration in seconds: 60 to 34819200 (13 months)
             The message expires if it has not been transmitted within the hold duration
             The default hold duration is 172800 seconds (48 hours)
     @param  appID
@@ -4409,7 +4409,7 @@ Swarm_M138_Error_e SWARM_M138::transmitText(const char *data, uint64_t *msg_id, 
   size_t msgLen = strlen(SWARM_M138_COMMAND_TX_DATA); // $TD
   msgLen += 1; // Space
   if (useAppID) msgLen += 3 + 5 + 1; // AI=65535,
-  if (useHold) msgLen += 3 + 8 + 1; // HD=31536000,
+  if (useHold) msgLen += 3 + 8 + 1; // HD=34819200,
   if (useEpoch) msgLen += 3 + 10 + 1; // ET=2147483647,
   msgLen += 2 + strlen(data); // Quotes plus the message itself
   msgLen += 5; // asterix, checksum chars, line feed, null
@@ -4557,7 +4557,7 @@ Swarm_M138_Error_e SWARM_M138::transmitBinary(const uint8_t *data, size_t len, u
     @param  msg_id
             A pointer to a uint64_t which will hold the assigned message ID
     @param  hold
-            The hold duration in seconds: 60 to 31536000 (one year)
+            The hold duration in seconds: 60 to 34819200 (13 months)
             The message expires if it has not been transmitted within the hold duration
             The default hold duration is 172800 seconds (48 hours)
     @return SWARM_M138_ERROR_SUCCESS if successful
@@ -4581,7 +4581,7 @@ Swarm_M138_Error_e SWARM_M138::transmitBinaryHold(const uint8_t *data, size_t le
     @param  msg_id
             A pointer to a uint64_t which will hold the assigned message ID
     @param  hold
-            The hold duration in seconds: 60 to 31536000 (one year)
+            The hold duration in seconds: 60 to 34819200 (13 months)
             The message expires if it has not been transmitted within the hold duration
             The default hold duration is 172800 seconds (48 hours)
     @param  appID
@@ -4661,7 +4661,7 @@ Swarm_M138_Error_e SWARM_M138::transmitBinary(const uint8_t *data, size_t len, u
   size_t msgLen = strlen(SWARM_M138_COMMAND_TX_DATA); // $TD
   msgLen += 1; // Space
   if (useAppID) msgLen += 3 + 5 + 1; // AI=65535,
-  if (useHold) msgLen += 3 + 8 + 1; // HD=31536000,
+  if (useHold) msgLen += 3 + 8 + 1; // HD=34819200,
   if (useEpoch) msgLen += 3 + 10 + 1; // ET=2147483647,
   msgLen += 2 * len; // The message length in ASCII Hex
   msgLen += 5; // asterix, checksum chars, line feed, null
