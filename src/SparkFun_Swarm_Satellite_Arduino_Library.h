@@ -324,7 +324,7 @@ public:
   Swarm_M138_Error_e getCPUvoltage(float *voltage);                          // Get the CPU voltage
 
   /** Restart Device */
-  Swarm_M138_Error_e restartDevice(bool dbinit = false); // Restart the modem. Optionally clear the message database, to clear the DBXTOHIVEFULL error
+  Swarm_M138_Error_e restartDevice(bool deletedb = false); // Restart the modem. Optionally clear the message database
 
   /** Receive Test */
   Swarm_M138_Error_e getReceiveTest(Swarm_M138_Receive_Test_t *rxTest); // Get the most recent $RT message

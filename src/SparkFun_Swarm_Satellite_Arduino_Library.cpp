@@ -2476,15 +2476,15 @@ Swarm_M138_Error_e SWARM_M138::getCPUvoltage(float *voltage)
 /**************************************************************************/
 /*!
     @brief  Restart the modem
-    @param  dbinit
-            Bool: If true, the database will be cleared - to clear the DBXTOHIVEFULL error. Default is false.
+    @param  deletedb
+            Bool: If true, the database will be cleared. Default is false.
     @return SWARM_M138_ERROR_SUCCESS if successful
             SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
             SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
             SWARM_M138_ERROR_ERROR if unsuccessful
 */
 /**************************************************************************/
-Swarm_M138_Error_e SWARM_M138::restartDevice(bool dbinit)
+Swarm_M138_Error_e SWARM_M138::restartDevice(bool deletedb)
 {
   char *command;
   char *response;
@@ -2492,13 +2492,13 @@ Swarm_M138_Error_e SWARM_M138::restartDevice(bool dbinit)
 
   // Allocate memory for the command, rate, asterix, checksum bytes, \n and \0
   size_t msgLen = strlen(SWARM_M138_COMMAND_RESTART) + 5;
-  if (dbinit) msgLen += 7; // space dbinit
+  if (deletedb) msgLen += 9; // space deletedb
   command = swarm_m138_alloc_char(msgLen);
   if (command == NULL)
     return (SWARM_M138_ERROR_MEM_ALLOC);
   memset(command, 0, msgLen); // Clear it
-  if (dbinit)
-    sprintf(command, "%s dbinit*", SWARM_M138_COMMAND_RESTART); // Copy the command, add the asterix
+  if (deletedb)
+    sprintf(command, "%s deletedb*", SWARM_M138_COMMAND_RESTART); // Copy the command, add the asterix
   else
     sprintf(command, "%s*", SWARM_M138_COMMAND_RESTART); // Copy the command, add the asterix
   addChecksumLF(command); // Add the checksum bytes and line feed
