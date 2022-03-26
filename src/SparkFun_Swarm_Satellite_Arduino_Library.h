@@ -352,7 +352,7 @@ public:
   Swarm_M138_Error_e deleteTxMessage(uint64_t msg_id);                                                                           // Delete TX message with ID
   Swarm_M138_Error_e deleteAllTxMessages(void);                                                                                  // Delete all unsent messages
   Swarm_M138_Error_e listTxMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL); // List unsent message with ID
-  Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids, uint16_t maxCount);                                                        // List the IDs of all unsent messages. Call getUnsentMessageCount first so you know how many IDs to expect
+  //Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids, uint16_t maxCount); // List the IDs of all unsent messages. ** Not supported with modem firmware >= v2.0.0 **
 
   /** Transmit Data */
   // The application ID is optional. Valid appID's are: 0 to 64999. Swarm reserves use of 65000 - 65535.

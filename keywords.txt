@@ -84,7 +84,7 @@ getUnsentMessageCount	KEYWORD2
 deleteTxMessage	KEYWORD2
 deleteAllTxMessages	KEYWORD2
 listTxMessage	KEYWORD2
-listTxMessagesIDs	KEYWORD2
+# listTxMessagesIDs	KEYWORD2
 
 transmitText	KEYWORD2
 transmitTextHold	KEYWORD2

@@ -4028,214 +4028,216 @@ Swarm_M138_Error_e SWARM_M138::listTxMessage(uint64_t msg_id, char *asciiHex, si
   return (err);
 }
 
-/**************************************************************************/
-/*!
-    @brief  List the IDs of all the unsent messages
-    @param  ids
-            A pointer to an array of uint64_t to hold the message IDs.
-            Call getUnsentMessageCount first so you know how many IDs to expect and allocate storage for them.
-            Listing all the messages through the backlog could blow up the memory,
-            so this function reads the returned text one byte at a time and extracts the IDs from that.
-    @param  maxCount
-            Stop after listing the IDs for this many messages
-            Set this to the size of your uint64_t array
-    @return SWARM_M138_ERROR_SUCCESS if successful
-            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
-            SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
-            SWARM_M138_ERROR_ERROR if unsuccessful
-*/
-/**************************************************************************/
-Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids, uint16_t maxCount)
-{
-  char *command;
-  char *response;
-  char *rxBuff;
-  char *idStart;
-  char *idEnd;
-  Swarm_M138_Error_e err;
-  uint16_t msgTotal = 0, msgCount = 0;
+// ** listTxMessagesIDs is not supported with modem firmware >= v2.0.0 **
+// 
+// /**************************************************************************/
+// /*!
+//     @brief  List the IDs of all the unsent messages
+//     @param  ids
+//             A pointer to an array of uint64_t to hold the message IDs.
+//             Call getUnsentMessageCount first so you know how many IDs to expect and allocate storage for them.
+//             Listing all the messages through the backlog could blow up the memory,
+//             so this function reads the returned text one byte at a time and extracts the IDs from that.
+//     @param  maxCount
+//             Stop after listing the IDs for this many messages
+//             Set this to the size of your uint64_t array
+//     @return SWARM_M138_ERROR_SUCCESS if successful
+//             SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+//             SWARM_M138_ERROR_ERR if a command ERR is received - error is returned in commandError
+//             SWARM_M138_ERROR_ERROR if unsuccessful
+// */
+// /**************************************************************************/
+// Swarm_M138_Error_e SWARM_M138::listTxMessagesIDs(uint64_t *ids, uint16_t maxCount)
+// {
+//   char *command;
+//   char *response;
+//   char *rxBuff;
+//   char *idStart;
+//   char *idEnd;
+//   Swarm_M138_Error_e err;
+//   uint16_t msgTotal = 0, msgCount = 0;
 
-  if (maxCount == 0) // Quit if maxCount is zero. It must be at least one.
-    return (SWARM_M138_ERROR_ERROR);
+//   if (maxCount == 0) // Quit if maxCount is zero. It must be at least one.
+//     return (SWARM_M138_ERROR_ERROR);
 
-  // Calculate the "size of" each element in the array of uint64_t
-  // Note: sizeof(uint64_t) doesn't seem to give the correct result?
-  uint64_t test[2];
-  size_t sizeOfUint64Array = &test[1] - &test[0];
+//   // Calculate the "size of" each element in the array of uint64_t
+//   // Note: sizeof(uint64_t) doesn't seem to give the correct result?
+//   uint64_t test[2];
+//   size_t sizeOfUint64Array = &test[1] - &test[0];
 
-  if (_printDebug == true)
-  {
-    _debugPort->print(F("listTxMessagesIDs: sizeOfUint64Array is "));
-    _debugPort->println(sizeOfUint64Array);
-  }
+//   if (_printDebug == true)
+//   {
+//     _debugPort->print(F("listTxMessagesIDs: sizeOfUint64Array is "));
+//     _debugPort->println(sizeOfUint64Array);
+//   }
 
-  err = getUnsentMessageCount(&msgTotal); // Get the message count so we know how many messages to expect
-  if (err != SWARM_M138_ERROR_SUCCESS)
-    return (err);
+//   err = getUnsentMessageCount(&msgTotal); // Get the message count so we know how many messages to expect
+//   if (err != SWARM_M138_ERROR_SUCCESS)
+//     return (err);
 
-  if (_printDebug == true)
-  {
-    _debugPort->print(F("listTxMessagesIDs: msgTotal is "));
-    _debugPort->println(msgTotal);
-  }
+//   if (_printDebug == true)
+//   {
+//     _debugPort->print(F("listTxMessagesIDs: msgTotal is "));
+//     _debugPort->println(msgTotal);
+//   }
 
-  if (msgTotal == 0) // Quit if there are no messages in the buffer
-    return (SWARM_M138_ERROR_ERROR);
+//   if (msgTotal == 0) // Quit if there are no messages in the buffer
+//     return (SWARM_M138_ERROR_ERROR);
 
-  // Allocate memory for the response
-  response = swarm_m138_alloc_char(_RxBuffSize);
-  if (response == NULL)
-  {
-    return(SWARM_M138_ERROR_MEM_ALLOC);
-  }
-  memset(response, 0, _RxBuffSize); // Clear it
+//   // Allocate memory for the response
+//   response = swarm_m138_alloc_char(_RxBuffSize);
+//   if (response == NULL)
+//   {
+//     return(SWARM_M138_ERROR_MEM_ALLOC);
+//   }
+//   memset(response, 0, _RxBuffSize); // Clear it
 
-  // Allocate memory for the command, asterix, checksum bytes, \n and \0
-  command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_TX_MGMT) + 9);
-  if (command == NULL)
-  {
-    swarm_m138_free_char(response);
-    return (SWARM_M138_ERROR_MEM_ALLOC);
-  }
-  memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_TX_MGMT) + 9); // Clear it
-  sprintf(command, "%s L=U*", SWARM_M138_COMMAND_MSG_TX_MGMT); // Copy the command, add the asterix
-  addChecksumLF(command); // Add the checksum bytes and line feed
+//   // Allocate memory for the command, asterix, checksum bytes, \n and \0
+//   command = swarm_m138_alloc_char(strlen(SWARM_M138_COMMAND_MSG_TX_MGMT) + 9);
+//   if (command == NULL)
+//   {
+//     swarm_m138_free_char(response);
+//     return (SWARM_M138_ERROR_MEM_ALLOC);
+//   }
+//   memset(command, 0, strlen(SWARM_M138_COMMAND_MSG_TX_MGMT) + 9); // Clear it
+//   sprintf(command, "%s L=U*", SWARM_M138_COMMAND_MSG_TX_MGMT); // Copy the command, add the asterix
+//   addChecksumLF(command); // Add the checksum bytes and line feed
 
-  // if (_printDebug == true)
-  // {
-  //   _debugPort->println(F("listTxMessagesIDs: ====>"));
-  //   _debugPort->flush();
-  // }
+//   // if (_printDebug == true)
+//   // {
+//   //   _debugPort->println(F("listTxMessagesIDs: ====>"));
+//   //   _debugPort->flush();
+//   // }
 
-  sendCommand(command); // Send the command
+//   sendCommand(command); // Send the command
 
-  swarm_m138_free_char(command); // Free command now - we are done with it
+//   swarm_m138_free_char(command); // Free command now - we are done with it
 
-  unsigned long startTime = millis();
-  bool keepGoing = true;
+//   unsigned long startTime = millis();
+//   bool keepGoing = true;
 
-  // Keep checking incoming chars for up to SWARM_M138_MESSAGE_ID_TIMEOUT secs total
-  while ((millis() < (startTime + SWARM_M138_MESSAGE_ID_TIMEOUT)) && keepGoing)
-  {
-    int hwAvail = hwAvailable();
+//   // Keep checking incoming chars for up to SWARM_M138_MESSAGE_ID_TIMEOUT secs total
+//   while ((millis() < (startTime + SWARM_M138_MESSAGE_ID_TIMEOUT)) && keepGoing)
+//   {
+//     int hwAvail = hwAvailable();
 
-    if (hwAvail > 0) //hwAvailable can return -1 if the serial port is NULL
-    {
-      rxBuff = swarm_m138_alloc_char((size_t)(hwAvail + 1)); // Allocate memory to hold the data
-      if (rxBuff != NULL)
-      {
-        memset(rxBuff, 0, (size_t)(hwAvail + 1)); // Clear it
-        int charsRead = hwReadChars(rxBuff, hwAvail); // Read the characters
+//     if (hwAvail > 0) //hwAvailable can return -1 if the serial port is NULL
+//     {
+//       rxBuff = swarm_m138_alloc_char((size_t)(hwAvail + 1)); // Allocate memory to hold the data
+//       if (rxBuff != NULL)
+//       {
+//         memset(rxBuff, 0, (size_t)(hwAvail + 1)); // Clear it
+//         int charsRead = hwReadChars(rxBuff, hwAvail); // Read the characters
 
-        // if (_printDebug == true)
-        //   _debugPort->print(rxBuff);
+//         // if (_printDebug == true)
+//         //   _debugPort->print(rxBuff);
 
-        for (int i = 0; i < charsRead; i++) // Go through a character at a time
-        {
-          char cc[2];
-          cc[0] = rxBuff[i];
-          cc[1] = 0;
-          if (strlen(response) < _RxBuffSize) // Check if response is full
-          {
-            strcat(response, cc); // Copy a single character into response
-            if (cc[0] == '\n') // Check if this is a newline
-            {
-              idStart = strstr(response, "$MT "); // Check for $MT
-              if (idStart != NULL)
-              {
-                idStart = strstr(idStart, " AI="); // Check if the message has AI= at the start
-                if (idStart != NULL)
-                {
-                  idStart = strchr(idStart, ','); // Find the first comma
-                  if (idStart != NULL)
-                  {
-                    idStart++;
-                    idStart = strchr(idStart, ','); // Find the second comma
-                  }
-                }
-                else // Message does not have AI=
-                {
-                  idStart = strstr(response, "$MT "); // Find the $MT again
-                  if (idStart != NULL)
-                  {
-                    idStart = strchr(idStart, ','); // Find the first comma
-                  }
-                }
+//         for (int i = 0; i < charsRead; i++) // Go through a character at a time
+//         {
+//           char cc[2];
+//           cc[0] = rxBuff[i];
+//           cc[1] = 0;
+//           if (strlen(response) < _RxBuffSize) // Check if response is full
+//           {
+//             strcat(response, cc); // Copy a single character into response
+//             if (cc[0] == '\n') // Check if this is a newline
+//             {
+//               idStart = strstr(response, "$MT "); // Check for $MT
+//               if (idStart != NULL)
+//               {
+//                 idStart = strstr(idStart, " AI="); // Check if the message has AI= at the start
+//                 if (idStart != NULL)
+//                 {
+//                   idStart = strchr(idStart, ','); // Find the first comma
+//                   if (idStart != NULL)
+//                   {
+//                     idStart++;
+//                     idStart = strchr(idStart, ','); // Find the second comma
+//                   }
+//                 }
+//                 else // Message does not have AI=
+//                 {
+//                   idStart = strstr(response, "$MT "); // Find the $MT again
+//                   if (idStart != NULL)
+//                   {
+//                     idStart = strchr(idStart, ','); // Find the first comma
+//                   }
+//                 }
                 
-                if (idStart != NULL)
-                {
-                  idStart++; // Point to the first digit of the message ID
-                  idEnd = strchr(idStart, ','); // Find the second/third comma
-                  if (idEnd != NULL)
-                  {
-                    // We have (hopefully) a valid ID to extract
-                    uint64_t theID = 0;
-                    char c = *idStart;
-                    while ((c != ',') && (idStart < idEnd))
-                    {
-                      // if (_printDebug == true)
-                      //   _debugPort->write(c);
-                      theID *= 10;
-                      theID += (uint64_t)(c - '0');
-                      idStart++;
-                      c = *idStart;
-                    }
-                    *(ids + (sizeOfUint64Array * (size_t)msgCount)) = theID; // Store the extracted ID
-                    msgCount++; // Increment the count
-                    if (_printDebug == true)
-                    {
-                      _debugPort->println();
-                      _debugPort->print(F("listTxMessagesIDs: msgCount is "));
-                      _debugPort->println(msgCount);
-                    }
-                    if ((msgCount == msgTotal) || (msgCount == maxCount))
-                      keepGoing = false; // Stop if we have reached msgTotal or maxCount
-                  }
-                }
-              }
-              else
-              {
-                // We got a \n but failed to find $MT.
-                // So, let's be nice and copy whatever this message is into the backlog if possible
-                size_t backlogLength = strlen((const char *)_swarmBacklog);
-                size_t msgLen = strlen((const char *)response);
-                if ((backlogLength + msgLen) < _RxBuffSize)
-                {
-                  memcpy(&_swarmBacklog[backlogLength], response, msgLen);
-                }
-              }
-              memset(response, 0, _RxBuffSize); // Clear the response
-            }
-          }
-          else // Response is full... We are stuck... And we are still in the for loop...
-          {
-            swarm_m138_free_char(rxBuff);
-            swarm_m138_free_char(response);
-            return (SWARM_M138_ERROR_ERROR);
-          }
-        }
-        swarm_m138_free_char(rxBuff); // Free the buffer
-      }
-      else // The memory allocation failed
-      {
-        err = SWARM_M138_ERROR_MEM_ALLOC;
-        keepGoing = false;
-      }
-    }
-    else
-      delay(1);
-  }
+//                 if (idStart != NULL)
+//                 {
+//                   idStart++; // Point to the first digit of the message ID
+//                   idEnd = strchr(idStart, ','); // Find the second/third comma
+//                   if (idEnd != NULL)
+//                   {
+//                     // We have (hopefully) a valid ID to extract
+//                     uint64_t theID = 0;
+//                     char c = *idStart;
+//                     while ((c != ',') && (idStart < idEnd))
+//                     {
+//                       // if (_printDebug == true)
+//                       //   _debugPort->write(c);
+//                       theID *= 10;
+//                       theID += (uint64_t)(c - '0');
+//                       idStart++;
+//                       c = *idStart;
+//                     }
+//                     *(ids + (sizeOfUint64Array * (size_t)msgCount)) = theID; // Store the extracted ID
+//                     msgCount++; // Increment the count
+//                     if (_printDebug == true)
+//                     {
+//                       _debugPort->println();
+//                       _debugPort->print(F("listTxMessagesIDs: msgCount is "));
+//                       _debugPort->println(msgCount);
+//                     }
+//                     if ((msgCount == msgTotal) || (msgCount == maxCount))
+//                       keepGoing = false; // Stop if we have reached msgTotal or maxCount
+//                   }
+//                 }
+//               }
+//               else
+//               {
+//                 // We got a \n but failed to find $MT.
+//                 // So, let's be nice and copy whatever this message is into the backlog if possible
+//                 size_t backlogLength = strlen((const char *)_swarmBacklog);
+//                 size_t msgLen = strlen((const char *)response);
+//                 if ((backlogLength + msgLen) < _RxBuffSize)
+//                 {
+//                   memcpy(&_swarmBacklog[backlogLength], response, msgLen);
+//                 }
+//               }
+//               memset(response, 0, _RxBuffSize); // Clear the response
+//             }
+//           }
+//           else // Response is full... We are stuck... And we are still in the for loop...
+//           {
+//             swarm_m138_free_char(rxBuff);
+//             swarm_m138_free_char(response);
+//             return (SWARM_M138_ERROR_ERROR);
+//           }
+//         }
+//         swarm_m138_free_char(rxBuff); // Free the buffer
+//       }
+//       else // The memory allocation failed
+//       {
+//         err = SWARM_M138_ERROR_MEM_ALLOC;
+//         keepGoing = false;
+//       }
+//     }
+//     else
+//       delay(1);
+//   }
 
-  swarm_m138_free_char(response);
+//   swarm_m138_free_char(response);
 
-  // if (_printDebug == true)
-  // {
-  //   _debugPort->println(F("listTxMessagesIDs: <===="));
-  //   _debugPort->flush();
-  // }
+//   // if (_printDebug == true)
+//   // {
+//   //   _debugPort->println(F("listTxMessagesIDs: <===="));
+//   //   _debugPort->flush();
+//   // }
 
-  return (err);
-}
+//   return (err);
+// }
 
 /**************************************************************************/
 /*!
