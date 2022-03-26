@@ -539,16 +539,20 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
           if (eventEnd >= (eventStart + 10)) // Check we have enough data
           {
             // Extract the power status
-            int unused1H, unused2H, unused3H, unused4H, tempH;
-            char unused1L[8], unused2L[8], unused3L[8], unused4L[8], tempL[8];
+            int unused1H, unused2H, unused3H, cpu_voltsH, tempH;
+            char unused1L[8], unused2L[8], unused3L[8], cpu_voltsL[8], tempL[8];
 
             int ret = sscanf(eventStart, "$PW %d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,]*",
-                            &unused1H, unused1L, &unused2H, unused2L,
-                            &unused3H, unused3L, &unused4H, unused4L,
+                            &cpu_voltsH, cpu_voltsL, &unused1H, unused1L,
+                            &unused2H, unused2L, &unused3H, unused3L,
                             &tempH, tempL);
 
             if (ret == 10)
             {
+              if (cpu_voltsH >= 0)
+                powerStatus->cpu_volts = (float)cpu_voltsH + ((float)atol(cpu_voltsL) / pow(10, strlen(cpu_voltsL)));
+              else
+                powerStatus->cpu_volts = (float)cpu_voltsH - ((float)atol(cpu_voltsL) / pow(10, strlen(cpu_voltsL)));
               if (unused1H >= 0)
                 powerStatus->unused1 = (float)unused1H + ((float)atol(unused1L) / pow(10, strlen(unused1L)));
               else
@@ -561,10 +565,6 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
                 powerStatus->unused3 = (float)unused3H + ((float)atol(unused3L) / pow(10, strlen(unused3L)));
               else
                 powerStatus->unused3 = (float)unused3H - ((float)atol(unused3L) / pow(10, strlen(unused3L)));
-              if (unused4H >= 0)
-                powerStatus->unused4 = (float)unused4H + ((float)atol(unused4L) / pow(10, strlen(unused4L)));
-              else
-                powerStatus->unused4 = (float)unused4H - ((float)atol(unused4L) / pow(10, strlen(unused4L)));
               if (tempH >= 0)
                 powerStatus->temp = (float)tempH + ((float)atol(tempL) / pow(10, strlen(tempL)));
               else
@@ -2259,12 +2259,12 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatus(Swarm_M138_Power_Status_t *powerSt
     }
 
     // Extract the power status
-    int unused1H, unused2H, unused3H, unused4H, tempH;
-    char unused1L[8], unused2L[8], unused3L[8], unused4L[8], tempL[8];
+    int unused1H, unused2H, unused3H, cpu_voltsH, tempH;
+    char unused1L[8], unused2L[8], unused3L[8], cpu_voltsL[8], tempL[8];
 
     int ret = sscanf(responseStart, "$PW %d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,],%d.%[^,]*",
-                     &unused1H, unused1L, &unused2H, unused2L,
-                     &unused3H, unused3L, &unused4H, unused4L,
+                     &cpu_voltsH, cpu_voltsL, &unused1H, unused1L,
+                     &unused2H, unused2L, &unused3H, unused3L,
                      &tempH, tempL);
 
     if (ret < 10)
@@ -2274,6 +2274,10 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatus(Swarm_M138_Power_Status_t *powerSt
       return (SWARM_M138_ERROR_ERROR);
     }
 
+    if (cpu_voltsH >= 0)
+      powerStatus->cpu_volts = (float)cpu_voltsH + ((float)atol(cpu_voltsL) / pow(10, strlen(cpu_voltsL)));
+    else
+      powerStatus->cpu_volts = (float)cpu_voltsH - ((float)atol(cpu_voltsL) / pow(10, strlen(cpu_voltsL)));
     if (unused1H >= 0)
       powerStatus->unused1 = (float)unused1H + ((float)atol(unused1L) / pow(10, strlen(unused1L)));
     else
@@ -2286,10 +2290,6 @@ Swarm_M138_Error_e SWARM_M138::getPowerStatus(Swarm_M138_Power_Status_t *powerSt
       powerStatus->unused3 = (float)unused3H + ((float)atol(unused3L) / pow(10, strlen(unused3L)));
     else
       powerStatus->unused3 = (float)unused3H - ((float)atol(unused3L) / pow(10, strlen(unused3L)));
-    if (unused4H >= 0)
-      powerStatus->unused4 = (float)unused4H + ((float)atol(unused4L) / pow(10, strlen(unused4L)));
-    else
-      powerStatus->unused4 = (float)unused4H - ((float)atol(unused4L) / pow(10, strlen(unused4L)));
     if (tempH >= 0)
       powerStatus->temp = (float)tempH + ((float)atol(tempL) / pow(10, strlen(tempL)));
     else
@@ -2444,6 +2444,26 @@ Swarm_M138_Error_e SWARM_M138::getTemperature(float *temperature)
   Swarm_M138_Error_e err = getPowerStatus(powerStatus);
   if (err == SWARM_M138_ERROR_SUCCESS)
     *temperature = powerStatus->temp;
+  delete powerStatus;
+  return (err);
+}
+
+/**************************************************************************/
+/*!
+    @brief  Get the modem CPU voltage
+    @param  voltage
+            A pointer to a float which will hold the result
+    @return SWARM_M138_ERROR_SUCCESS if successful
+            SWARM_M138_ERROR_MEM_ALLOC if the memory allocation fails
+            SWARM_M138_ERROR_ERROR if unsuccessful
+*/
+/**************************************************************************/
+Swarm_M138_Error_e SWARM_M138::getCPUvoltage(float *voltage)
+{
+  Swarm_M138_Power_Status_t *powerStatus = new Swarm_M138_Power_Status_t;
+  Swarm_M138_Error_e err = getPowerStatus(powerStatus);
+  if (err == SWARM_M138_ERROR_SUCCESS)
+    *voltage = powerStatus->cpu_volts;
   delete powerStatus;
   return (err);
 }

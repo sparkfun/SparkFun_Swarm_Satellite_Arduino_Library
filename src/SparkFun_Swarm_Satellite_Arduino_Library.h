@@ -212,11 +212,11 @@ typedef struct
 /** A struct to hold the power staus info */
 typedef struct
 {
+  float cpu_volts; // Voltage measured at input to the CPU
   float unused1;
   float unused2;
   float unused3;
-  float unused4;
-  float temp; // CPU Temperature in degrees C to one decimal point
+  float temp;      // CPU Temperature in degrees C to one decimal point
 } Swarm_M138_Power_Status_t;
 
 /** A struct to hold the receive test results */
@@ -320,6 +320,7 @@ public:
   Swarm_M138_Error_e getPowerStatusRate(uint32_t *rate);                     // Query the current $PW rate
   Swarm_M138_Error_e setPowerStatusRate(uint32_t rate);                      // Set the rate of $PW messages. 0 == Disable. Max is 2147483647 (2^31 - 1)
   Swarm_M138_Error_e getTemperature(float *temperature);                     // Get the most recent temperature
+  Swarm_M138_Error_e getCPUvoltage(float *voltage);                          // Get the CPU voltage
 
   /** Restart Device */
   Swarm_M138_Error_e restartDevice(bool dbinit = false); // Restart the modem. Optionally clear the message database, to clear the DBXTOHIVEFULL error

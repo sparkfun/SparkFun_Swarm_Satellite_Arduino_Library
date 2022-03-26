@@ -58,6 +58,7 @@ getPowerStatus	KEYWORD2
 getPowerStatusRate	KEYWORD2
 setPowerStatusRate	KEYWORD2
 getTemperature	KEYWORD2
+getCPUvoltage	KEYWORD2
 
 restartDevice	KEYWORD2
 
