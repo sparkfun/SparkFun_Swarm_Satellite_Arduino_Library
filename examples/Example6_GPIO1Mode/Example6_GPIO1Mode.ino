@@ -49,16 +49,22 @@ void setup()
 
   // Set the GPIO1 pin mode
   // Possible choices are:
-  //   SWARM_M138_GPIO1_ANALOG
-  //   SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH
-  //   SWARM_M138_GPIO1_EXIT_SLEEP_HIGH_LOW
-  //   SWARM_M138_GPIO1_OUTPUT_LOW
-  //   SWARM_M138_GPIO1_OUTPUT_HIGH
-  //   SWARM_M138_GPIO1_MESSAGES_PENDING_LOW
-  //   SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH
-  //   SWARM_M138_GPIO1_SLEEP_MODE_LOW
-  //   SWARM_M138_GPIO1_SLEEP_MODE_HIGH
-  Swarm_M138_Error_e err = mySwarm.setGPIO1Mode(SWARM_M138_GPIO1_OUTPUT_LOW);
+  //  SWARM_M138_GPIO1_ANALOG
+  //  SWARM_M138_GPIO1_ADC
+  //  SWARM_M138_GPIO1_INPUT
+  //  SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH
+  //  SWARM_M138_GPIO1_EXIT_SLEEP_HIGH_LOW
+  //  SWARM_M138_GPIO1_OUTPUT_LOW
+  //  SWARM_M138_GPIO1_OUTPUT_HIGH
+  //  SWARM_M138_GPIO1_MESSAGES_UNREAD_LOW
+  //  SWARM_M138_GPIO1_MESSAGES_UNREAD_HIGH
+  //  SWARM_M138_GPIO1_MESSAGES_UNSENT_LOW
+  //  SWARM_M138_GPIO1_MESSAGES_UNSENT_HIGH
+  //  SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_LOW
+  //  SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_HIGH
+  //  SWARM_M138_GPIO1_SLEEP_MODE_LOW
+  //  SWARM_M138_GPIO1_SLEEP_MODE_HIGH
+  Swarm_M138_Error_e err = mySwarm.setGPIO1Mode(SWARM_M138_GPIO1_ADC);
   
   if (err == SWARM_M138_SUCCESS)
   {
@@ -95,6 +101,12 @@ void setup()
     case SWARM_M138_GPIO1_ANALOG:
       Serial.println(F(" Analog, pin is internally disconnected and not used (default)"));
       break;
+    case SWARM_M138_GPIO1_ADC:
+      Serial.println(F(" Analog ADC, pin can be read to measure input voltage (0-3.3V)"));
+      break;
+    case SWARM_M138_GPIO1_INPUT:
+      Serial.println(F(" Input, pin can be read as a general purpose digital input (High or Low)"));
+      break;
     case SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH:
       Serial.println(F(" Input, low-to-high transition exits sleep mode"));
       break;
@@ -107,21 +119,59 @@ void setup()
     case SWARM_M138_GPIO1_OUTPUT_HIGH:
       Serial.println(F(" Output (open drain), set high/open"));
       break;
-    case SWARM_M138_GPIO1_MESSAGES_PENDING_LOW:
-      Serial.println(F(" Output (open drain), low indicates messages pending for client"));
+    case SWARM_M138_GPIO1_MESSAGES_UNREAD_LOW:
+      Serial.println(F(" Output (open drain), low indicates unread messages pending for user"));
       break;
-    case SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH:
-      Serial.println(F(" Output (open drain), high/open indicates messages pending for client"));
+    case SWARM_M138_GPIO1_MESSAGES_UNREAD_HIGH:
+      Serial.println(F(" Output (open drain), high/open indicates unread messages pending for user"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_UNSENT_LOW:
+      Serial.println(F(" Output (open drain), low indicates unsent messages pending for transmit"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_UNSENT_HIGH:
+      Serial.println(F(" Output (open drain), high/open indicates unsent messages pending for transmit"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_LOW:
+      Serial.println(F(" Output (open drain), low indicates unread or unsent messages"));
+      break;
+    case SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_HIGH:
+      Serial.println(F(" Output (open drain), high/open indicates unread or unsent messages"));
       break;
     case SWARM_M138_GPIO1_SLEEP_MODE_LOW:
-      Serial.println(F(" Output (open drain), low indicates in sleep mode. Otherwise output is high/open"));
+      Serial.println(F(" Output (open drain), low indicates sleep mode is active. Otherwise output is high/open"));
       break;
     case SWARM_M138_GPIO1_SLEEP_MODE_HIGH:
-      Serial.println(F(" Output (open drain), high/open indicates in sleep mode. Otherwise output is low"));
+      Serial.println(F(" Output (open drain), high/open indicates sleep mode is active. Otherwise output is low"));
       break;
     default:
       Serial.println(F(" UNKNOWN"));
       break;      
+  }
+
+  // Just to prove we can, call getGPIO1voltage to check the pin voltage (only valid for modes 1 and 2)
+  float voltage;
+  err = mySwarm.readGPIO1voltage(&voltage);
+  
+  if (err == SWARM_M138_SUCCESS)
+  {
+    Serial.print(F("GPIO1 voltage is: "));
+    Serial.println(voltage, 3);
+  }
+  else
+  {
+    Serial.print(F("Swarm communication error: "));
+    Serial.print((int)err);
+    Serial.print(F(" : "));
+    Serial.print(mySwarm.modemErrorString(err)); // Convert the error into printable text
+    if (err == SWARM_M138_ERROR_ERR) // If we received a command error (ERR), print it
+    {
+      Serial.print(F(" : "));
+      Serial.print(mySwarm.commandError); 
+      Serial.print(F(" : "));
+      Serial.println(mySwarm.commandErrorString((const char *)mySwarm.commandError)); 
+    }
+    else
+      Serial.println();
   }
 }
 

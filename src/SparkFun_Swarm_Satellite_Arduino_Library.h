@@ -168,12 +168,18 @@ typedef struct
 typedef enum
 {
   SWARM_M138_GPIO1_ANALOG = 0,
+  SWARM_M138_GPIO1_ADC,
+  SWARM_M138_GPIO1_INPUT,
   SWARM_M138_GPIO1_EXIT_SLEEP_LOW_HIGH,
   SWARM_M138_GPIO1_EXIT_SLEEP_HIGH_LOW,
   SWARM_M138_GPIO1_OUTPUT_LOW,
   SWARM_M138_GPIO1_OUTPUT_HIGH,
-  SWARM_M138_GPIO1_MESSAGES_PENDING_LOW,
-  SWARM_M138_GPIO1_MESSAGES_PENDING_HIGH,
+  SWARM_M138_GPIO1_MESSAGES_UNREAD_LOW,
+  SWARM_M138_GPIO1_MESSAGES_UNREAD_HIGH,
+  SWARM_M138_GPIO1_MESSAGES_UNSENT_LOW,
+  SWARM_M138_GPIO1_MESSAGES_UNSENT_HIGH,
+  SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_LOW,
+  SWARM_M138_GPIO1_MESSAGES_UNREAD_UNSENT_HIGH,
   SWARM_M138_GPIO1_SLEEP_MODE_LOW,
   SWARM_M138_GPIO1_SLEEP_MODE_HIGH,
   SWARM_M138_GPIO1_INVALID
@@ -206,11 +212,11 @@ typedef struct
 /** A struct to hold the power staus info */
 typedef struct
 {
+  float cpu_volts; // Voltage measured at input to the CPU
   float unused1;
   float unused2;
   float unused3;
-  float unused4;
-  float temp; // CPU Temperature in degrees C to one decimal point
+  float temp;      // CPU Temperature in degrees C to one decimal point
 } Swarm_M138_Power_Status_t;
 
 /** A struct to hold the receive test results */
@@ -238,6 +244,7 @@ typedef enum
 typedef enum
 {
   SWARM_M138_MODEM_STATUS_BOOT_ABORT = 0, // A firmware crash occurred that caused a restart
+  SWARM_M138_MODEM_STATUS_BOOT_DEVICEID,  // Displays the device ID of the Modem
   SWARM_M138_MODEM_STATUS_BOOT_POWERON,   // Power has been applied
   SWARM_M138_MODEM_STATUS_BOOT_RUNNING,   // Boot has completed and ready to accept commands
   SWARM_M138_MODEM_STATUS_BOOT_UPDATED,   // A firmware update was performed
@@ -299,6 +306,7 @@ public:
   /** GPIO1 Control */
   Swarm_M138_Error_e getGPIO1Mode(Swarm_M138_GPIO1_Mode_e *mode); // Get the GPIO1 pin mode
   Swarm_M138_Error_e setGPIO1Mode(Swarm_M138_GPIO1_Mode_e mode);  // Set the GPIO1 pin mode
+  Swarm_M138_Error_e readGPIO1voltage(float *voltage);  // Read the GPIO1 pin: mode 1 (ADC) returns a true voltage; mode 2 (INPUT) returns 0.00 for low or 3.30 for high
 
   /** GPS fix quality */
   Swarm_M138_Error_e getGpsFixQuality(Swarm_M138_GPS_Fix_Quality_t *fixQuality); // Get the most recent $GS message
@@ -313,9 +321,10 @@ public:
   Swarm_M138_Error_e getPowerStatusRate(uint32_t *rate);                     // Query the current $PW rate
   Swarm_M138_Error_e setPowerStatusRate(uint32_t rate);                      // Set the rate of $PW messages. 0 == Disable. Max is 2147483647 (2^31 - 1)
   Swarm_M138_Error_e getTemperature(float *temperature);                     // Get the most recent temperature
+  Swarm_M138_Error_e getCPUvoltage(float *voltage);                          // Get the CPU voltage
 
   /** Restart Device */
-  Swarm_M138_Error_e restartDevice(bool dbinit = false); // Restart the modem. Optionally clear the message database, to clear the DBXTOHIVEFULL error
+  Swarm_M138_Error_e restartDevice(bool deletedb = false); // Restart the modem. Optionally clear the message database
 
   /** Receive Test */
   Swarm_M138_Error_e getReceiveTest(Swarm_M138_Receive_Test_t *rxTest); // Get the most recent $RT message
@@ -334,6 +343,7 @@ public:
   Swarm_M138_Error_e markAllRxMessages(void);                                                                             // Mark all messages as read
   Swarm_M138_Error_e getMessageNotifications(bool *enabled);                                                              // Query if message notifications are enabled
   Swarm_M138_Error_e setMessageNotifications(bool enable);                                                                // Enable / disable message notifications
+  Swarm_M138_Error_e listMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL);        // List the message with ID. Does not change message state. Message contents are copied to asciiHex as ASCII Hex
   Swarm_M138_Error_e readMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL);        // Read the message with ID. Message contents are copied to asciiHex as ASCII Hex
   Swarm_M138_Error_e readOldestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
   Swarm_M138_Error_e readNewestMessage(char *asciiHex, size_t len, uint64_t *msg_id, uint32_t *epoch = NULL, uint16_t *appID = NULL); // Read the oldest message. Message contents are copied to asciiHex. ID is copied to id.
@@ -343,7 +353,7 @@ public:
   Swarm_M138_Error_e deleteTxMessage(uint64_t msg_id);                                                                           // Delete TX message with ID
   Swarm_M138_Error_e deleteAllTxMessages(void);                                                                                  // Delete all unsent messages
   Swarm_M138_Error_e listTxMessage(uint64_t msg_id, char *asciiHex, size_t len, uint32_t *epoch = NULL, uint16_t *appID = NULL); // List unsent message with ID
-  Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids, uint16_t maxCount);                                                        // List the IDs of all unsent messages. Call getUnsentMessageCount first so you know how many IDs to expect
+  //Swarm_M138_Error_e listTxMessagesIDs(uint64_t *ids, uint16_t maxCount); // List the IDs of all unsent messages. ** Not supported with modem firmware >= v2.0.0 **
 
   /** Transmit Data */
   // The application ID is optional. Valid appID's are: 0 to 64999. Swarm reserves use of 65000 - 65535.
@@ -398,7 +408,11 @@ private:
   bool _checkUnsolicitedMsgReentrant; // Prevent reentry of checkUnsolicitedMsg - just in case it gets called from a callback
 
 #define _RxBuffSize 512
-  const unsigned long _rxWindowMillis = 5; // Wait up to 5ms for any more serial characters to arrive
+  // Wait for this many millis for any more serial characters to arrive.
+  // On ESP32, Serial.available only provides an update every ~120 bytes during the reception of long messages...
+  // We need to set _rxWindowMillis to slightly longer than (120 * 10 / 115200)
+  // https://gitter.im/espressif/arduino-esp32?at=5e25d6370a1cf54144909c85
+  const unsigned long _rxWindowMillis = 12;
   char *_swarmBacklog;                     // Allocated in SWARM_M138::begin
 
   // Callbacks for unsolicited messages
