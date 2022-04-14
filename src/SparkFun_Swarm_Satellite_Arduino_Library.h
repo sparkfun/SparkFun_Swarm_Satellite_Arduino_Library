@@ -267,6 +267,9 @@ public:
   /** @brief Class to communicate with the Swarm M138 satellite modem */
   SWARM_M138(void);
 
+  // Destructor
+  ~SWARM_M138(void);
+
   /** Begin -- initialize module and ensure it's connected */
 #ifdef SWARM_M138_SOFTWARE_SERIAL_ENABLED
   bool begin(SoftwareSerial &softSerial);
