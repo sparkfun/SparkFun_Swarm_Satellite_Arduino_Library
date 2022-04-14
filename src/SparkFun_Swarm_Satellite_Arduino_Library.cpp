@@ -38,6 +38,8 @@ SWARM_M138::SWARM_M138(void)
   _printDebug = false;
   _checkUnsolicitedMsgReentrant = false;
   _lastI2cCheck = millis();
+  _swarmBacklog = NULL;
+  commandError = NULL;
 
   _swarmDateTimeCallback = NULL;
   _swarmGpsJammingCallback = NULL;
@@ -50,6 +52,21 @@ SWARM_M138::SWARM_M138(void)
   _swarmModemStatusCallback = NULL;
   _swarmTransmitDataCallback = NULL;
 
+}
+
+SWARM_M138::~SWARM_M138(void)
+{
+  if (_swarmBacklog != NULL)
+  {
+    delete[] _swarmBacklog;
+    _swarmBacklog = NULL;
+  }
+
+  if (commandError != NULL)
+  {
+    delete[] commandError;
+    commandError = NULL;
+  }
 }
 
 #ifdef SWARM_M138_SOFTWARE_SERIAL_ENABLED
@@ -142,7 +159,8 @@ bool SWARM_M138::isConnected(void)
 // Private: allocate memory for the serial buffers and clear it
 bool SWARM_M138::initializeBuffers()
 {
-  _swarmBacklog = new char[_RxBuffSize];
+  if (_swarmBacklog == NULL)
+    _swarmBacklog = new char[_RxBuffSize];
   if (_swarmBacklog == NULL)
   {
     if (_printDebug == true)
@@ -151,7 +169,8 @@ bool SWARM_M138::initializeBuffers()
   }
   memset(_swarmBacklog, 0, _RxBuffSize);
 
-  commandError = new char[SWARM_M138_MAX_CMD_ERROR_LEN];
+  if (commandError == NULL)
+    commandError = new char[SWARM_M138_MAX_CMD_ERROR_LEN];
   if (commandError == NULL)
   {
     if (_printDebug == true)
