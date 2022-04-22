@@ -1,7 +1,7 @@
 SparkFun Swarm Satellite Arduino Library
 ==============================
 
-[![Satellite Transceiver Breakout - Swarm M138](https://cdn.sparkfun.com/assets/parts/1/8/8/6/3/19236-Swarm_Serial_Breakout-01.jpg)](https://www.sparkfun.com/products/19236)
+[![Satellite Transceiver Breakout - Swarm M138](https://cdn.sparkfun.com/r/188-188/assets/parts/1/8/8/6/3/19236-Satellite_Transceiver_Breakout_-_Swarm_M138-05.jpg)](https://www.sparkfun.com/products/19236)
 
 [*Satellite Transceiver Breakout - Swarm M138*](https://www.sparkfun.com/products/19236)
 
