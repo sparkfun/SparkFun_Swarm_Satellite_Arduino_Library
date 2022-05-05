@@ -92,10 +92,9 @@ const char myAltitude[] =   "100";        //                  <-- Update this wi
 
 // At the time or writing:
 //  Swarm satellites are named: SPACEBEE-n or SPACEBEENZ-n
-//  I guess SPACEBEENZ could be in a special orbit for New Zealand?
-//  SPACEBEE numbers are 1 - 111 (8 and 9 are missing)
-//  SPACEBEENZ numbers are 1 - 10
-const int maxSats = 120;
+//  SPACEBEE numbers are 1 - 139 (8 and 9 are missing)
+//  SPACEBEENZ numbers are 1 - 14
+const int maxSats = 152;
 
 // Stop checking when we find this many satellite duplications for a single satellite
 // (When > 24 hours of passes have been processed)
