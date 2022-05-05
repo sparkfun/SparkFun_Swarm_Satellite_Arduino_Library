@@ -2,7 +2,7 @@
 // Kindly provided by:
 // https://celestrak.com/NORAD/elements/table.php?tleFile=swarm&title=Swarm%20Satellites&orbits=0&pointsPerRev=90&frame=1
 
-const int maxSwarmNORAD = 111;
+const int maxSwarmNORAD = 139;
 const unsigned long swarmNORAD[] = {
 0,
 43142, // SPACEBEE-1 
@@ -115,10 +115,38 @@ const unsigned long swarmNORAD[] = {
 48895, // SPACEBEE-108 
 48897, // SPACEBEE-109 
 48899, // SPACEBEE-110 
-48904  // SPACEBEE-111 
+48904,  // SPACEBEE-111 
+52025,  // SPACEBEE-112 
+52024,  // SPACEBEE-113 
+52010,  // SPACEBEE-114 
+52016,  // SPACEBEE-115 
+52023,  // SPACEBEE-116 
+52022,  // SPACEBEE-117 
+52012,  // SPACEBEE-118 
+52015,  // SPACEBEE-119 
+52013,  // SPACEBEE-120 
+52009,  // SPACEBEE-121 
+52014,  // SPACEBEE-122 
+52027,  // SPACEBEE-123 
+52029,  // SPACEBEE-124 
+52021,  // SPACEBEE-125 
+52011,  // SPACEBEE-126 
+52020,  // SPACEBEE-127 
+52182,  // SPACEBEE-128 
+52179,  // SPACEBEE-129 
+52176,  // SPACEBEE-130 
+52181,  // SPACEBEE-131 
+52185,  // SPACEBEE-132 
+52183,  // SPACEBEE-133 
+52180,  // SPACEBEE-134 
+52187,  // SPACEBEE-135 
+52164,  // SPACEBEE-136 
+52186,  // SPACEBEE-137 
+52166,  // SPACEBEE-138 
+52177  // SPACEBEE-139 
 };
 
-const int maxSwarmNZNORAD = 10;
+const int maxSwarmNZNORAD = 14;
 const unsigned long swarmNZNORAD[] = {
 0,
 46959, // SPACEBEENZ-1 
@@ -130,5 +158,9 @@ const unsigned long swarmNZNORAD[] = {
 48889, // SPACEBEENZ-7 
 48891, // SPACEBEENZ-8 
 48887, // SPACEBEENZ-9 
-48882  // SPACEBEENZ-10 
+48882,  // SPACEBEENZ-10 
+52019,  // SPACEBEENZ-11 
+52028,  // SPACEBEENZ-12 
+52026,  // SPACEBEENZ-13 
+52018  // SPACEBEENZ-14 
 };
