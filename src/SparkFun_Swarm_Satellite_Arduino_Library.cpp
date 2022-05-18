@@ -370,8 +370,8 @@ bool SWARM_M138::processUnsolicitedEvent(const char *event)
             if (ret == 7)
             {
               dateTime->YYYY = (uint16_t)year;
-              dateTime->DD = (uint8_t)month;
-              dateTime->MM = (uint8_t)day;
+              dateTime->DD = (uint8_t)day;
+              dateTime->MM = (uint8_t)month;
               dateTime->hh = (uint8_t)hour;
               dateTime->mm = (uint8_t)minute;
               dateTime->ss = (uint8_t)second;
