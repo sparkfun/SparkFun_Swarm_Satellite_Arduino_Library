@@ -1166,8 +1166,8 @@ Swarm_M138_Error_e SWARM_M138::getDateTime(Swarm_M138_DateTimeData_t *dateTime)
     }
 
     dateTime->YYYY = (uint16_t)year;
-    dateTime->DD = (uint8_t)month;
-    dateTime->MM = (uint8_t)day;
+    dateTime->MM = (uint8_t)month;
+    dateTime->DD = (uint8_t)day;
     dateTime->hh = (uint8_t)hour;
     dateTime->mm = (uint8_t)minute;
     dateTime->ss = (uint8_t)second;
