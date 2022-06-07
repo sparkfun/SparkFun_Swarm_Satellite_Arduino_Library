@@ -74,7 +74,7 @@
 #include <Wire.h> // Needed for I2C communication with Qwiic Swarm
 
 /** Timeouts for the serial commands */
-#define SWARM_M138_STANDARD_RESPONSE_TIMEOUT 1000 ///< Standard command timeout: allow one second for the modem to respond
+#define SWARM_M138_STANDARD_RESPONSE_TIMEOUT 1500 ///< Standard command timeout: allow 1.5 seconds for the modem to respond (See issue #22. 1000ms was too short.)
 #define SWARM_M138_MESSAGE_DELETE_TIMEOUT 5000    ///< Allow extra time when deleting a message
 #define SWARM_M138_MESSAGE_ID_TIMEOUT 5000        ///< Allow extra time when reading the message IDs
 #define SWARM_M138_MESSAGE_READ_TIMEOUT 3000      ///< Allow extra time when reading a message

@@ -5697,17 +5697,19 @@ void SWARM_M138::pruneBacklog()
 
   while (event != NULL) //If event is actionable, add it to pruneBuffer.
   {
-    // These are the events we want to keep so they can be processed by poll / checkUnsolicitedMsg
-    if ((strstr(event, "$DT ") != NULL)
-        || (strstr(event, "$GJ ") != NULL)
-        || (strstr(event, "$GN ") != NULL)
-        || (strstr(event, "$GS ") != NULL)
-        || (strstr(event, "$PW ") != NULL)
-        || (strstr(event, "$RD ") != NULL)
-        || (strstr(event, "$RT ") != NULL)
-        || (strstr(event, "$SL ") != NULL)
-        || (strstr(event, "$M138 ") != NULL)
-        || (strstr(event, "$TD ") != NULL))
+    // These are the events we want to keep so they can be processed by checkUnsolicitedMsg.
+    // See issue #22. We only keep events which have a callback, otherwise the backlog
+    // fills up causing other problems.
+    if (((strstr(event, "$DT ") != NULL) && (_swarmDateTimeCallback != NULL))
+        || ((strstr(event, "$GJ ") != NULL) && (_swarmGpsJammingCallback != NULL))
+        || ((strstr(event, "$GN ") != NULL) && (_swarmGeospatialCallback != NULL))
+        || ((strstr(event, "$GS ") != NULL) && (_swarmGpsFixQualityCallback != NULL))
+        || ((strstr(event, "$PW ") != NULL) && (_swarmPowerStatusCallback != NULL))
+        || ((strstr(event, "$RD ") != NULL) && (_swarmReceiveMessageCallback != NULL))
+        || ((strstr(event, "$RT ") != NULL) && (_swarmReceiveTestCallback != NULL))
+        || ((strstr(event, "$SL ") != NULL) && (_swarmSleepWakeCallback != NULL))
+        || ((strstr(event, "$M138 ") != NULL) && (_swarmModemStatusCallback != NULL))
+        || ((strstr(event, "$TD ") != NULL) && (_swarmTransmitDataCallback != NULL)))
     {
       strcat(_pruneBuffer, event); // The URCs are all readable text so using strcat is OK
       strcat(_pruneBuffer, "\n"); // strtok blows away delimiter, but we want that for later.
