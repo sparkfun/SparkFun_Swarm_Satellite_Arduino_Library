@@ -583,7 +583,7 @@ void loop()
         else
           secsToSleep = 0; // Prevent secsToSleep from going -ve
   
-        if (secsToSleep > 60) // Don't sleep if there is less than one minute to the next transmit. (See numSleepAttempts below...)
+        if (secsToSleep > 300) // Don't sleep if there is less than 300 seconds to the next transmit. (See numSleepAttempts below...)
         {
           console.print(F("Going to sleep for "));
           console.print(secsToSleep);
@@ -620,31 +620,40 @@ void loop()
       sleepWakeSeen = false; // Clear the $SL-seen flag
       gpio1InterruptSeen = false; // Clear the interrupt-seen flag
 
-      int numSleepAttempts = 5; // Try to sleep this many times (sleepMode can fail immediately after a message transmit)
+      int numSleepAttempts = 8; // Try to sleep this many times (sleepMode can fail immediately after a message transmit)
       bool sleepSuccess = false;
 
       while ((!sleepSuccess) && (numSleepAttempts > 0))
       {
-        if (mySwarm.sleepMode(secsToSleep) == SWARM_M138_SUCCESS)
+        Swarm_M138_Error_e err = mySwarm.sleepMode(secsToSleep);
+        if (err == SWARM_M138_SUCCESS)
         {
           sleepSuccess = true;
         }
         else
         {
           // sleepMode failed
-          console.println(F("sleepMode failed! Trying again..."));
-          mySwarm.checkUnsolicitedMsg();
-          delay(1000);
-          mySwarm.checkUnsolicitedMsg();
-          delay(1000);
-          mySwarm.checkUnsolicitedMsg();
-          delay(1000);
-          mySwarm.checkUnsolicitedMsg();
-          delay(1000);
-          mySwarm.checkUnsolicitedMsg();
-          delay(1000);
+          console.println(F("sleepMode failed! Error: "));
+          console.print((int)err);
+          console.print(F(" : "));
+          console.print(mySwarm.modemErrorString(err)); // Convert the error into printable text
+          if (err == SWARM_M138_ERROR_ERR) // If we received a command error (ERR), print it
+          {
+            console.print(F(" : "));
+            console.print(mySwarm.commandError); 
+            console.print(F(" : "));
+            console.println(mySwarm.commandErrorString((const char *)mySwarm.commandError)); 
+          }
+          else
+            console.println();
+          console.println(F("Trying again in 30 seconds..."));
+          for (int i = 0; i < 30; i++)
+          {
+            mySwarm.checkUnsolicitedMsg();
+            delay(1000);
+          }
           numSleepAttempts--;
-          secsToSleep -= 5;
+          secsToSleep -= 30;
         }
       }
 
