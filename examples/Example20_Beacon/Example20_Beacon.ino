@@ -437,7 +437,6 @@ void loop()
         strcat(message, scratchpad);
         degC -= (float)((int)degC);
       }
-      strcat(message, scratchpad);
 
       // Print the message
       console.print(F("Message is: "));
