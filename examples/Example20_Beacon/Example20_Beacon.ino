@@ -383,7 +383,7 @@ void loop()
     
     case queueMessage:
     {
-      char message[192]; // Messages can be up to 192 bytes
+      char message[193]; // Messages can be up to 192 bytes. Include one extra char to hold the null.
 
       // Some platforms do not support sprintf %02d correctly
       // So, assemble the dateTime in ISO 8601 format manually
@@ -428,8 +428,8 @@ void loop()
       
       mySwarm.getGeospatialInfo(&pos); // Request the most recent geospatial information
       
-      // Some platforms do not support sprintf %03.4f correctly
-      // So, append (concatenate) lat, lon and alt manually
+      // Some platforms do not support sprintf %.4f correctly
+      // So, append (concatenate) lat and lon manually
       float lat = pos.lat;
       sprintf(scratchpad, "%d", (int)lat);
       strcat(message, scratchpad);
@@ -460,7 +460,7 @@ void loop()
       }
       strcat(message, ",");
       
-      sprintf(scratchpad, "%d", (int)pos.alt);
+      sprintf(scratchpad, "%d", (int)pos.alt); // Append the altitude
       strcat(message, scratchpad);
       strcat(message, ",");
 
@@ -481,7 +481,11 @@ void loop()
       }
 
       // strcat(message, ",");
-      // =====> Append your data to message here <=====
+      //
+      // =====> Append your data to the message here <=====
+      //
+      // (Make sure you do not exceed 192 characters!)
+      // (You may want to check the message length with strlen(message) before you append.)
 
       // Print the message
       console.print(F("Message is: "));
@@ -659,7 +663,7 @@ void loop()
 
       if (sleepSuccess)
       {
-        // If you can put your processor to sleep, do it here.
+        // =====> If you can put your processor to sleep, do it here <=====
         // You can:
         //   sleep for secsToSleep seconds
         //   sleep and be woken by the GPIO1 interrupt
