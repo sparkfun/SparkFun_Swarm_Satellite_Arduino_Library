@@ -182,7 +182,7 @@ void loop()
       
       while (!modemBegun) // If the begin failed, keep trying to begin communication with the modem
       {
-        console.println(F("Could not communicate with the modem. Please check the serial connections..."));
+        console.println(F("Could not communicate with the modem. It may still be booting..."));
         delay(2000);
         modemBegun = mySwarm.begin(swarmSerial);
       }
@@ -269,6 +269,8 @@ void loop()
       if (err == SWARM_M138_SUCCESS) err = mySwarm.setPowerStatusRate(0);
       if (err == SWARM_M138_SUCCESS) err = mySwarm.setReceiveTestRate(0);
       if (err == SWARM_M138_SUCCESS) err = mySwarm.setMessageNotifications(false);
+
+      //if (err == SWARM_M138_SUCCESS) err = mySwarm.deleteAllTxMessages(); // If you want to empty the transmit queue on  startup, do it here...
 
       if (err == SWARM_M138_SUCCESS)
       {
@@ -478,6 +480,9 @@ void loop()
         degC -= (float)((int)degC);
       }
 
+      // strcat(message, ",");
+      // =====> Append your data to message here <=====
+
       // Print the message
       console.print(F("Message is: "));
       console.println(message);
@@ -529,16 +534,17 @@ void loop()
       bool keepGoing = true;
       while (keepGoing)
       {
-        mySwarm.getUnsentMessageCount(&unsent); // Check if the queue is empty
-        
-        if (unsent == 0)
-          keepGoing = false;
-        else
+        if (mySwarm.getUnsentMessageCount(&unsent) == SWARM_M138_SUCCESS) // Check if the queue is empty
         {
-          if (!rollOver) // Check if timeout has been reached
-            keepGoing = millis() < waitUntil;
+          if (unsent == 0)
+            keepGoing = false;
           else
-            keepGoing = (millis() > waitStarted) || (millis() < waitUntil);
+          {
+            if (!rollOver) // Check if timeout has been reached
+              keepGoing = millis() < waitUntil;
+            else
+              keepGoing = (millis() > waitStarted) || (millis() < waitUntil);
+          }
         }
 
         mySwarm.checkUnsolicitedMsg();
@@ -566,33 +572,40 @@ void loop()
     case goToSleep:
     {
       Swarm_M138_DateTimeData_t dateTimeNow;
-      mySwarm.getDateTime(&dateTimeNow); // Get the date and time from the modem
-
-      uint32_t epochAtQueueMessage = convertDateTimeToEpoch(&dateTime); // What was the time when we added the last message to the queue?
-      uint32_t epochNow = convertDateTimeToEpoch(&dateTimeNow);
-
-      secsToSleep = epochAtQueueMessage + (((uint32_t)txIntervalMins) * 60); // Add the tx interval to the time when the message was queued
-      if (secsToSleep > epochNow)
-        secsToSleep -= epochNow; // Subtract epochNow
-      else
-        secsToSleep = 0; // Prevent secsToSleep from going -ve
-
-      if (secsToSleep > 60) // Don't sleep if there is less than one minute to the next transmit
+      if (mySwarm.getDateTime(&dateTimeNow) == SWARM_M138_SUCCESS) // Get the date and time from the modem
       {
-        console.print(F("Going to sleep for "));
-        console.print(secsToSleep);
-        console.println(F(" seconds"));
-
-        loopState = sleepUntil;
+        uint32_t epochAtQueueMessage = convertDateTimeToEpoch(&dateTime); // What was the time when we added the last message to the queue?
+        uint32_t epochNow = convertDateTimeToEpoch(&dateTimeNow);
+  
+        secsToSleep = epochAtQueueMessage + (((uint32_t)txIntervalMins) * 60); // Add the tx interval to the time when the message was queued
+        if (secsToSleep > epochNow)
+          secsToSleep -= epochNow; // Subtract epochNow
+        else
+          secsToSleep = 0; // Prevent secsToSleep from going -ve
+  
+        if (secsToSleep > 60) // Don't sleep if there is less than one minute to the next transmit. (See numSleepAttempts below...)
+        {
+          console.print(F("Going to sleep for "));
+          console.print(secsToSleep);
+          console.println(F(" seconds"));
+  
+          loopState = sleepUntil;
+        }
+        else
+        {
+          console.print(F("Waiting for "));
+          console.print(secsToSleep);
+          console.println(F(" seconds"));
+  
+          delay(secsToSleep * 1000);
+          loopState = queueMessage; // Move on
+        }
       }
       else
       {
-        console.print(F("Waiting for "));
-        console.print(secsToSleep);
-        console.println(F(" seconds"));
-
-        delay(secsToSleep * 1000);
-        loopState = queueMessage; // Move on
+        // getDateTime failed: try again - do not change loopState
+        mySwarm.checkUnsolicitedMsg();
+        delay(500);
       }
     }
     break;
@@ -607,29 +620,66 @@ void loop()
       sleepWakeSeen = false; // Clear the $SL-seen flag
       gpio1InterruptSeen = false; // Clear the interrupt-seen flag
 
-      mySwarm.sleepMode(secsToSleep);
+      int numSleepAttempts = 5; // Try to sleep this many times (sleepMode can fail immediately after a message transmit)
+      bool sleepSuccess = false;
 
-      // If you can put your processor to sleep, do it here.
-      // You can:
-      //   sleep for secsToSleep seconds
-      //   sleep and be woken by the GPIO1 interrupt
-      //   sleep until the modem generates a $SL message
-
-      
-      // If you can not put your processor to sleep, then wait for an interrupt and/or a $SL message
-      while ((!sleepWakeSeen) && (!gpio1InterruptSeen))
+      while ((!sleepSuccess) && (numSleepAttempts > 0))
       {
-        mySwarm.checkUnsolicitedMsg(); // Process the $SL message when it arrives
-        delay(1000);
+        if (mySwarm.sleepMode(secsToSleep) == SWARM_M138_SUCCESS)
+        {
+          sleepSuccess = true;
+        }
+        else
+        {
+          // sleepMode failed
+          console.println(F("sleepMode failed! Trying again..."));
+          mySwarm.checkUnsolicitedMsg();
+          delay(1000);
+          mySwarm.checkUnsolicitedMsg();
+          delay(1000);
+          mySwarm.checkUnsolicitedMsg();
+          delay(1000);
+          mySwarm.checkUnsolicitedMsg();
+          delay(1000);
+          mySwarm.checkUnsolicitedMsg();
+          delay(1000);
+          numSleepAttempts--;
+          secsToSleep -= 5;
+        }
       }
 
+      if (sleepSuccess)
+      {
+        // If you can put your processor to sleep, do it here.
+        // You can:
+        //   sleep for secsToSleep seconds
+        //   sleep and be woken by the GPIO1 interrupt
+        //   sleep until the modem generates a $SL message
+  
+        
+        // If you can not put your processor to sleep, then wait for an interrupt and/or a $SL message
+        while ((!sleepWakeSeen) && (!gpio1InterruptSeen))
+        {
+          mySwarm.checkUnsolicitedMsg(); // Process the $SL message when it arrives
+          delay(1000);
+        }
 
-      console.println(F("The modem is awake!"));
 
-      if (gpio1InterruptSeen)
-        console.println(F("GPIO1 interrupt seen!"));
+        console.println(F("The modem is awake!"));
+        
+        if (sleepWakeSeen)
+          console.println(F("$SL message seen"));
+  
+        if (gpio1InterruptSeen)
+          console.println(F("GPIO1 interrupt seen"));
       
-      loopState = waitFor3Dposition; // Move on
+        loopState = waitFor3Dposition; // Move on
+      }
+      else
+      {
+        console.println(F("sleepMode failed! Restarting..."));
+        loopState = startUp; // Repeat startUp
+      }
     }
     break;
   }
