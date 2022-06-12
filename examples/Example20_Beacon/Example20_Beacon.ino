@@ -74,6 +74,7 @@ enum loopStates
   waitForRunningSeen,
   configureModem,
   waitForDateTimePosition,
+  waitFor3Dposition,
   queueMessage,
   waitForTx,
   goToSleep,
@@ -159,6 +160,8 @@ void setup()
 void loop()
 {
   Swarm_M138_DateTimeData_t dateTime;
+  Swarm_M138_GeospatialData_t pos;
+  Swarm_M138_GPS_Fix_Quality_t fix;
   uint32_t secsToSleep;
 
   switch (loopState) // loop is one big switch statement
@@ -322,11 +325,49 @@ void loop()
       if ((datetimeSeen) && (positionSeen))
       {
         console.println(F("Modem has valid dateTime and position"));
-        loopState = queueMessage; // Move on
+        loopState = waitFor3Dposition; // Move on
       }
       else
       {
         console.println(F("Modem does not have valid dateTime and position. Trying again..."));
+        delay(2000);
+        loopState = startUp; // Repeat startUp
+      }      
+    }
+    break;
+    
+    //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    // waitFor3Dposition
+    //
+    // Wait until the modem has both valid date-time and a 3D position
+    
+    case waitFor3Dposition:
+    {
+      unsigned long waitStarted = millis();
+      const unsigned long maxWait = 120000; // Timeout after 120 seconds
+
+      console.println(F("Waiting for valid dateTime and 3D position..."));
+
+      bool keepGoing = true;
+      
+      while ((keepGoing) && (millis() < (waitStarted + maxWait)))
+      {
+        if (mySwarm.getDateTime(&dateTime) == SWARM_M138_SUCCESS) // Get the date and time from the modem
+          if (mySwarm.getGpsFixQuality(&fix) == SWARM_M138_SUCCESS) // Request the most recent geospatial information
+            if ((dateTime.valid) && ((fix.fix_type == SWARM_M138_GPS_FIX_TYPE_G3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_D3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_RK)))
+              keepGoing = false;
+        mySwarm.checkUnsolicitedMsg();
+        delay(1000);
+      }
+
+      if (!keepGoing)
+      {
+        console.println(F("Modem has valid dateTime and 3D position"));
+        loopState = queueMessage; // Move on
+      }
+      else
+      {
+        console.println(F("Modem does not have valid dateTime and/or 3D position. Trying again..."));
         delay(2000);
         loopState = startUp; // Repeat startUp
       }      
@@ -382,8 +423,7 @@ void loop()
         strcat(message, "I");
 
       strcat(message, ",");
-
-      Swarm_M138_GeospatialData_t pos;      
+      
       mySwarm.getGeospatialInfo(&pos); // Request the most recent geospatial information
       
       // Some platforms do not support sprintf %03.4f correctly
@@ -490,14 +530,18 @@ void loop()
       while (keepGoing)
       {
         mySwarm.getUnsentMessageCount(&unsent); // Check if the queue is empty
+        
         if (unsent == 0)
           keepGoing = false;
-
-        if (!rollOver) // Check if timeout has been reached
-          keepGoing = millis() < waitUntil;
         else
-          keepGoing = (millis() > waitStarted) || (millis() < waitUntil);
+        {
+          if (!rollOver) // Check if timeout has been reached
+            keepGoing = millis() < waitUntil;
+          else
+            keepGoing = (millis() > waitStarted) || (millis() < waitUntil);
+        }
 
+        mySwarm.checkUnsolicitedMsg();
         delay(500);
       }
 
@@ -527,7 +571,11 @@ void loop()
       uint32_t epochAtQueueMessage = convertDateTimeToEpoch(&dateTime); // What was the time when we added the last message to the queue?
       uint32_t epochNow = convertDateTimeToEpoch(&dateTimeNow);
 
-      secsToSleep = (epochAtQueueMessage + (((uint32_t)txIntervalMins) * 60)) - epochNow;
+      secsToSleep = epochAtQueueMessage + (((uint32_t)txIntervalMins) * 60); // Add the tx interval to the time when the message was queued
+      if (secsToSleep > epochNow)
+        secsToSleep -= epochNow; // Subtract epochNow
+      else
+        secsToSleep = 0; // Prevent secsToSleep from going -ve
 
       if (secsToSleep > 60) // Don't sleep if there is less than one minute to the next transmit
       {
@@ -569,7 +617,7 @@ void loop()
 
       
       // If you can not put your processor to sleep, then wait for an interrupt and/or a $SL message
-      while (!sleepWakeSeen && !gpio1InterruptSeen)
+      while ((!sleepWakeSeen) && (!gpio1InterruptSeen))
       {
         mySwarm.checkUnsolicitedMsg(); // Process the $SL message when it arrives
         delay(1000);
@@ -581,7 +629,7 @@ void loop()
       if (gpio1InterruptSeen)
         console.println(F("GPIO1 interrupt seen!"));
       
-      loopState = queueMessage; // Move on
+      loopState = waitFor3Dposition; // Move on
     }
     break;
   }
