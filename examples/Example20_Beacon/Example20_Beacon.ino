@@ -149,7 +149,7 @@ void gpio1ISR()
 void setup()
 {
   delay(2000); // Power up delay
-  
+
   console.begin(115200);
   console.println(F("Swarm Satellite Beacon"));
   console.println();
@@ -159,10 +159,11 @@ void setup()
 
 void loop()
 {
-  Swarm_M138_DateTimeData_t dateTime;
-  Swarm_M138_GeospatialData_t pos;
-  Swarm_M138_GPS_Fix_Quality_t fix;
-  uint32_t secsToSleep;
+  // Static 'global' variables for loop
+  static Swarm_M138_DateTimeData_t dateTime;
+  static Swarm_M138_GeospatialData_t pos;
+  static Swarm_M138_GPS_Fix_Quality_t fix;
+  static uint32_t secsToSleep;
 
   switch (loopState) // loop is one big switch statement
   {
@@ -355,9 +356,11 @@ void loop()
       while ((keepGoing) && (millis() < (waitStarted + maxWait)))
       {
         if (mySwarm.getDateTime(&dateTime) == SWARM_M138_SUCCESS) // Get the date and time from the modem
-          if (mySwarm.getGpsFixQuality(&fix) == SWARM_M138_SUCCESS) // Request the most recent geospatial information
-            if ((dateTime.valid) && ((fix.fix_type == SWARM_M138_GPS_FIX_TYPE_G3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_D3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_RK)))
-              keepGoing = false;
+          if (dateTime.valid)
+            if (mySwarm.getGpsFixQuality(&fix) == SWARM_M138_SUCCESS) // Request the most recent geospatial information
+              if ((fix.fix_type == SWARM_M138_GPS_FIX_TYPE_G3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_D3) || (fix.fix_type == SWARM_M138_GPS_FIX_TYPE_RK)) // Check fix is 3D
+                if (mySwarm.getGeospatialInfo(&pos) == SWARM_M138_SUCCESS) // Request the most recent geospatial information
+                  keepGoing = false;
         mySwarm.checkUnsolicitedMsg();
         delay(1000);
       }
@@ -389,8 +392,6 @@ void loop()
       // So, assemble the dateTime in ISO 8601 format manually
       char isoTime[21]; // YYYY-MM-DDTHH:MM:SSZ + null
       char scratchpad[10];
-
-      mySwarm.getDateTime(&dateTime); // Get the date and time from the modem
 
       sprintf(isoTime, "%d", dateTime.YYYY);
       strcat(isoTime, "-");
@@ -425,8 +426,6 @@ void loop()
         strcat(message, "I");
 
       strcat(message, ",");
-      
-      mySwarm.getGeospatialInfo(&pos); // Request the most recent geospatial information
       
       // Some platforms do not support sprintf %.4f correctly
       // So, append (concatenate) lat and lon manually
@@ -563,7 +562,7 @@ void loop()
       else
       {
         console.println(F("Timeout has expired. Adding a new message"));
-        loopState = queueMessage;
+        loopState = waitFor3Dposition;
       }        
     }
     break;
@@ -587,7 +586,7 @@ void loop()
         else
           secsToSleep = 0; // Prevent secsToSleep from going -ve
   
-        if (secsToSleep > 300) // Don't sleep if there is less than 300 seconds to the next transmit. (See numSleepAttempts below...)
+        if (secsToSleep > 60) // Don't sleep if there are less than 60 seconds to the next transmit. (See numSleepAttempts below...)
         {
           console.print(F("Going to sleep for "));
           console.print(secsToSleep);
@@ -602,7 +601,7 @@ void loop()
           console.println(F(" seconds"));
   
           delay(secsToSleep * 1000);
-          loopState = queueMessage; // Move on
+          loopState = waitFor3Dposition; // Move on
         }
       }
       else
@@ -624,7 +623,7 @@ void loop()
       sleepWakeSeen = false; // Clear the $SL-seen flag
       gpio1InterruptSeen = false; // Clear the interrupt-seen flag
 
-      int numSleepAttempts = 8; // Try to sleep this many times (sleepMode can fail immediately after a message transmit)
+      int numSleepAttempts = 6; // Try to sleep this many times
       bool sleepSuccess = false;
 
       while ((!sleepSuccess) && (numSleepAttempts > 0))
@@ -650,14 +649,14 @@ void loop()
           }
           else
             console.println();
-          console.println(F("Trying again in 30 seconds..."));
-          for (int i = 0; i < 30; i++)
+          console.println(F("Trying again in 5 seconds..."));
+          for (int i = 0; i < 5; i++)
           {
             mySwarm.checkUnsolicitedMsg();
             delay(1000);
           }
           numSleepAttempts--;
-          secsToSleep -= 30;
+          secsToSleep -= 5;
         }
       }
 
