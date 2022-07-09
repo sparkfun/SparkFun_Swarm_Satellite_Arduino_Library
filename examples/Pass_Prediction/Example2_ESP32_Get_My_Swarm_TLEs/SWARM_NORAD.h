@@ -1,8 +1,8 @@
 // The NORAD catalog numbers for the Swarm satellites
 // Kindly provided by:
-// https://celestrak.com/NORAD/elements/table.php?tleFile=swarm&title=Swarm%20Satellites&orbits=0&pointsPerRev=90&frame=1
+// https://celestrak.org/NORAD/elements/table.php?GROUP=swarm&FORMAT=tle
 
-const int maxSwarmNORAD = 139;
+const int maxSwarmNORAD = 155;
 const unsigned long swarmNORAD[] = {
 0,
 43142, // SPACEBEE-1 
@@ -143,10 +143,26 @@ const unsigned long swarmNORAD[] = {
 52164,  // SPACEBEE-136 
 52186,  // SPACEBEE-137 
 52166,  // SPACEBEE-138 
-52177  // SPACEBEE-139 
+52177,  // SPACEBEE-139 
+52399,  // SPACEBEE-140
+52400,  // SPACEBEE-141
+52401,  // SPACEBEE-142
+52394,  // SPACEBEE-143
+52410,  // SPACEBEE-144
+52411,  // SPACEBEE-145
+52412,  // SPACEBEE-146
+52415,  // SPACEBEE-147
+52406,  // SPACEBEE-148
+52407,  // SPACEBEE-149
+52409,  // SPACEBEE-150
+52413,  // SPACEBEE-151
+52414,  // SPACEBEE-152
+52408,  // SPACEBEE-153
+52417,  // SPACEBEE-154
+52416  // SPACEBEE-155
 };
 
-const int maxSwarmNZNORAD = 14;
+const int maxSwarmNZNORAD = 22;
 const unsigned long swarmNZNORAD[] = {
 0,
 46959, // SPACEBEENZ-1 
@@ -158,9 +174,17 @@ const unsigned long swarmNZNORAD[] = {
 48889, // SPACEBEENZ-7 
 48891, // SPACEBEENZ-8 
 48887, // SPACEBEENZ-9 
-48882,  // SPACEBEENZ-10 
-52019,  // SPACEBEENZ-11 
-52028,  // SPACEBEENZ-12 
-52026,  // SPACEBEENZ-13 
-52018  // SPACEBEENZ-14 
+48882, // SPACEBEENZ-10 
+52019, // SPACEBEENZ-11 
+52028, // SPACEBEENZ-12 
+52026, // SPACEBEENZ-13 
+52018, // SPACEBEENZ-14 
+52395, // SPACEBEENZ-15
+52396, // SPACEBEENZ-16
+52397, // SPACEBEENZ-17
+52398, // SPACEBEENZ-18
+52404, // SPACEBEENZ-19
+52402, // SPACEBEENZ-20
+52405, // SPACEBEENZ-21
+52403 // SPACEBEENZ-22
 };

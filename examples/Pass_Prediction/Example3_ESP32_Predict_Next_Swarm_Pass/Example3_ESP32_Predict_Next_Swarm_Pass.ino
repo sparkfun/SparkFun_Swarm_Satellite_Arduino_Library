@@ -1,7 +1,7 @@
 /*
   Predict the pass of the next Swarm satellite
   By: SparkFun Electronics / Paul Clark
-  Date: January 29th, 2022
+  Date: July 9th, 2022
   License: MIT. See license file for more information but you can
   basically do whatever you want with this code.
 
@@ -13,6 +13,8 @@
   
   It uses the CelesTrak Two-Line Element data collected by the previous example: Example2_ESP32_Get_My_Swarm_TLEs
   
+  ** If you have enjoyed this code, please consider making a donation to CelesTrak: https://celestrak.org/ **
+
   This example is written for the SparkFun Thing Plus C (SPX-18018) but can be adapted
   for any ESP32 board.
 
@@ -36,10 +38,10 @@
 
 Sgp4 sat;
 
-unsigned long unixTime = 1643652000; //                   <-- Update this with the current Unix time
+unsigned long unixTime = 1657324800; //                   <-- Update this with the current Unix time
 
 // See https://www.unixtimestamp.com/
-// 1643652000 = Mon Jan 31 2022 18:00:00 UTC. 
+// 1657324800 = Sat Jul 09 2022 00:00:00 GMT+0000
 
 double myLat = 55.000; // Latitude 55 degrees North       <-- Update this with your latitude
 double myLon = -1.000; // Longitude 1 degree West         <-- Update this with your longitude

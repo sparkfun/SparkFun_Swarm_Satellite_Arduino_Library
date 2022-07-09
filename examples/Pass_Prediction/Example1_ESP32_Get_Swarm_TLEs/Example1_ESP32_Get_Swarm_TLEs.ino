@@ -1,9 +1,11 @@
 /*
   Use ESP32 WiFi to get the Two-Line Elements for the Swarm satellites
   By: SparkFun Electronics / Paul Clark
-  Date: January 29th, 2022
+  Date: July 9th, 2022
   License: MIT. See license file for more information but you can
   basically do whatever you want with this code.
+
+  ** If you have enjoyed this code, please consider making a donation to CelesTrak: https://celestrak.org/ **
 
   This example shows how to:
     * Download the list of Two-Line Elements (orbit parameters) for _all_ of the Swarm satellites from CelesTrak
@@ -61,10 +63,11 @@ Sgp4 sat;
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // The Two-Line Element orbit data will be downloaded from CelesTrak
+// https://celestrak.org/NORAD/elements/gp.php?GROUP=swarm&FORMAT=tle
 
-const char celestrakServer[] = "https://celestrak.com";
+const char celestrakServer[] = "https://celestrak.org";
 
-const char getSwarmTLE[] = "NORAD/elements/gp.php?GROUP=SWARM&FORMAT=TLE";
+const char getSwarmTLE[] = "NORAD/elements/gp.php?GROUP=swarm&FORMAT=tle";
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // The Swarm Pass-Checker data can be downloaded from their server
