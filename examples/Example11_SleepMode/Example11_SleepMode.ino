@@ -112,8 +112,8 @@ void setup()
   }
 
   // Wait until the modem has valid Date/Time
-  Swarm_M138_DateTimeData_t *dateTime = new Swarm_M138_DateTimeData_t; // Allocate memory for the Date/Time
-  Swarm_M138_Error_e err = mySwarm.getDateTime(dateTime);
+  Swarm_M138_DateTimeData_t dateTime;
+  Swarm_M138_Error_e err = mySwarm.getDateTime(&dateTime);
 
   while (err != SWARM_M138_SUCCESS)
   {
@@ -123,23 +123,21 @@ void setup()
     Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
     Serial.println(F("The modem may not have acquired a valid GPS date/time reference..."));
     delay(2000);
-    err = mySwarm.getDateTime(dateTime);
+    err = mySwarm.getDateTime(&dateTime);
   }
 
   Serial.print(F("getDateTime returned: "));
-  Serial.print(dateTime->YYYY);
+  Serial.print(dateTime.YYYY);
   Serial.print(F("/"));
-  Serial.print(dateTime->MM);
+  Serial.print(dateTime.MM);
   Serial.print(F("/"));
-  Serial.print(dateTime->DD);
+  Serial.print(dateTime.DD);
   Serial.print(F(" "));
-  Serial.print(dateTime->hh);
+  Serial.print(dateTime.hh);
   Serial.print(F(":"));
-  Serial.print(dateTime->mm);
+  Serial.print(dateTime.mm);
   Serial.print(F(":"));
-  Serial.println(dateTime->ss);
-
-  delete dateTime; // Free the memory
+  Serial.println(dateTime.ss);
 
   // Set up the callback for the unsolicited $SL messages. Call printSleepWakeMsg when a new message arrives
   mySwarm.setSleepWakeCallback(&printSleepWakeMsg);
