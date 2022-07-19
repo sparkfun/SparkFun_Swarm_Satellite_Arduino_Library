@@ -31,6 +31,20 @@
 SWARM_M138 mySwarm;
 #define swarmSerial Serial1 // Use Serial1 to communicate with the modem. Change this if required.
 
+// If you are using the Swarm Satellite Transceiver MicroMod Function Board:
+//
+// The Function Board has an onboard power switch which controls the power to the modem.
+// The power is disabled by default.
+// To enable the power, you need to pull the correct PWR_EN pin high.
+//
+// Uncomment and adapt a line to match your Main Board and Processor configuration:
+//#define swarmPowerEnablePin A1 // MicroMod Main Board Single (DEV-18575) : with a Processor Board that supports A1 as an output
+//#define swarmPowerEnablePin 39 // MicroMod Main Board Single (DEV-18575) : with e.g. the Teensy Processor Board using pin 39 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin 4  // MicroMod Main Board Single (DEV-18575) : with e.g. the Artemis Processor Board using pin 4 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin G5 // MicroMod Main Board Double (DEV-18576) : Slot 0 with the ALT_PWR_EN0 set to G5<->PWR_EN0
+//#define swarmPowerEnablePin G6 // MicroMod Main Board Double (DEV-18576) : Slot 1 with the ALT_PWR_EN1 set to G6<->PWR_EN1
+
+
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 // Callback: printGPSJamming will be called when a new unsolicited $GJ message arrives
@@ -63,6 +77,12 @@ void printGPSJamming(const Swarm_M138_GPS_Jamming_Indication_t *jamming)
 
 void setup()
 {
+  // Swarm Satellite Transceiver MicroMod Function Board PWR_EN
+  #ifdef swarmPowerEnablePin
+  pinMode(swarmPowerEnablePin, OUTPUT); // Enable modem power 
+  digitalWrite(swarmPowerEnablePin, HIGH);
+  #endif
+
   delay(1000);
   
   Serial.begin(115200);
@@ -73,18 +93,31 @@ void setup()
 
   //mySwarm.enableDebugging(); // Uncomment this line to enable debug messages on Serial
 
-  if (mySwarm.begin(swarmSerial) == false) // Begin communication with the modem
+  bool modemBegun = mySwarm.begin(swarmSerial); // Begin communication with the modem
+  
+  while (!modemBegun) // If the begin failed, keep trying to begin communication with the modem
   {
-    Serial.println(F("Could not communicate with the modem. Please check the serial connections. Freezing..."));
-    while (1)
-      ;
+    Serial.println(F("Could not communicate with the modem. It may still be booting..."));
+    delay(2000);
+    modemBegun = mySwarm.begin(swarmSerial);
   }
 
   // Just to prove it works, call getGpsJammingIndication to request the most recent jamming indication
   Swarm_M138_GPS_Jamming_Indication_t *jamming = new Swarm_M138_GPS_Jamming_Indication_t; // Allocate memory for the jamming indication
   
-  mySwarm.getGpsJammingIndication(jamming);
+  Swarm_M138_Error_e err = mySwarm.getGpsJammingIndication(jamming);
   
+  while (err != SWARM_M138_SUCCESS)
+  {
+    Serial.print(F("Swarm communication error: "));
+    Serial.print((int)err);
+    Serial.print(F(" : "));
+    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
+    Serial.println(F("The modem may not have acquired a valid GPS signal..."));
+    delay(2000);
+    err = mySwarm.getGpsJammingIndication(jamming);
+  }
+
   Serial.print(F("getGPSJammingIndication returned: "));
   Serial.print(jamming->spoof_state);
   Serial.print(F(","));
@@ -98,7 +131,7 @@ void setup()
 
 
   // Set the jamming message rate: send the message every 2 seconds
-  Swarm_M138_Error_e err = mySwarm.setGpsJammingIndicationRate(2);
+  err = mySwarm.setGpsJammingIndicationRate(2);
   
   if (err == SWARM_M138_SUCCESS)
   {
