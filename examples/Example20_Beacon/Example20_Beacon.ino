@@ -38,6 +38,19 @@ SWARM_M138 mySwarm;
 
 const uint16_t txIntervalMins = 60; // Queue a new message every hour
 
+// If you are using the Swarm Satellite Transceiver MicroMod Function Board:
+//
+// The Function Board has an onboard power switch which controls the power to the modem.
+// The power is disabled by default.
+// To enable the power, you need to pull the correct PWR_EN pin high.
+//
+// Uncomment and adapt a line to match your Main Board and Processor configuration:
+//#define swarmPowerEnablePin A1 // MicroMod Main Board Single (DEV-18575) : with a Processor Board that supports A1 as an output
+//#define swarmPowerEnablePin 39 // MicroMod Main Board Single (DEV-18575) : with e.g. the Teensy Processor Board using pin 39 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin 4  // MicroMod Main Board Single (DEV-18575) : with e.g. the Artemis Processor Board using pin 4 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin G5 // MicroMod Main Board Double (DEV-18576) : Slot 0 with the ALT_PWR_EN0 set to G5<->PWR_EN0
+//#define swarmPowerEnablePin G6 // MicroMod Main Board Double (DEV-18576) : Slot 1 with the ALT_PWR_EN1 set to G6<->PWR_EN1
+
 // Define which digital I//O pin is connected to the modem's GPIO1 pin
 // The code will set up an interrupt on this pin to show when the modem comes out of sleep
 // Change this if required
@@ -177,6 +190,12 @@ void loop()
     
     case startUp:
     {
+      // Swarm Satellite Transceiver MicroMod Function Board PWR_EN
+      #ifdef swarmPowerEnablePin
+      pinMode(swarmPowerEnablePin, OUTPUT); // Enable modem power 
+      digitalWrite(swarmPowerEnablePin, HIGH);
+      #endif
+
       //mySwarm.enableDebugging(console); // Uncomment this line to enable debug messages on console
 
       bool modemBegun = mySwarm.begin(swarmSerial); // Begin communication with the modem
