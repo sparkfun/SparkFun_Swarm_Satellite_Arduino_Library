@@ -39,7 +39,13 @@
 
 //#define noModemGeospatial // Uncomment this line if you want to define your own location for the pass predictions
 
-#ifndef noModemGeospatial
+#ifdef noModemGeospatial
+
+const char myLatitude[] =   "55.000";     //                  <-- Update this with your latitude if desired
+const char myLongitude[] =  "-1.000";     //                  <-- Update this with your longitude if desired
+const char myAltitude[] =   "100";        //                  <-- Update this with your altitude in m if desired
+
+#else
 
 #include <SparkFun_Swarm_Satellite_Arduino_Library.h> //Click here to get the library:  http://librarymanager/All#SparkFun_Swarm_Satellite
 
@@ -76,8 +82,8 @@ HardwareSerial swarmSerial(2); //TX on 17, RX on 16
 #include <SD.h>
 #include <SPI.h>
 
-//#define sd_cs SS // microSD chip select - this should work on most boards
-const int sd_cs = 5; //Uncomment this line to define a specific pin for the chip select (e.g. pin 5 on the Thing Plus C)
+#define sd_cs SS // microSD chip select - this should work on most boards
+//const int sd_cs = 5; //Uncomment this line to define a specific pin for the chip select (e.g. pin 5 on the Thing Plus C)
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -110,12 +116,6 @@ const char latPrefix[] = "lat=";
 const char lonPrefix[] = "&lon=";
 const char altPrefix[] = "&alt=";
 const char mergeSuffix[] = "&merge=false";
-
-#ifdef noModemGeospatial
-const char myLatitude[] =   "55.000";     //                  <-- Update this with your latitude if desired
-const char myLongitude[] =  "-1.000";     //                  <-- Update this with your longitude if desired
-const char myAltitude[] =   "100";        //                  <-- Update this with your altitude in m if desired
-#endif
 
 // The pass checker data is returned in non-pretty JSON format:
 #define startOfFirstStartPass 32  // 8000\r\n{"passes":[{"start_pass":"YYYY-MM-DDTHH:MM:SSZ
