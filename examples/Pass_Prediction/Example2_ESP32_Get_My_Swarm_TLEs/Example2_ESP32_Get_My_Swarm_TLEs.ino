@@ -1,7 +1,7 @@
 /*
   Use ESP32 WiFi to get the Two-Line Elements for the Swarm satellites
   By: SparkFun Electronics / Paul Clark
-  Date: July 9th, 2022
+  Date: July 31st, 2022
   License: MIT. See license file for more information but you can
   basically do whatever you want with this code.
 
@@ -20,21 +20,13 @@
   Update secrets.h with your:
   - WiFi credentials
 
-  This example is written for the SparkFun Thing Plus C (SPX-18018) but can be adapted for any ESP32 board.
+  This example is written for the SparkFun Thing Plus C but can be adapted for any ESP32 board.
 
-  Use the Boards Manager to install the "ESP32 Arduino" boards.
-  
-  Add https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-  to your "Preferences \ Additional Boards Manager URLs" if required.
-  
-  Select "ESP32 Dev Module" as the Board (not "SparkFun ESP32 Thing Plus").
-
-  If the SD card is not detected ("Card Mount Failed"), try adding a pull-up resistor between
-  19/CIPO and 3V3. A resistor in the range 10K - 1M seems to help.
+  If the SD card is not detected ("Card Mount Failed"), try adding a 10K pull-up resistor between 19/POCI and 3V3.
 
   Feel like supporting open source hardware?
   Buy a board from SparkFun!
-  SparkFun Thing Plus C - ESP32 WROOM: https://www.sparkfun.com/products/18018
+  SparkFun Thing Plus C - ESP32 WROOM
 
 */
 
@@ -131,6 +123,8 @@ void setup()
 
     // Allocate 30 bytes to store the satellite name
     char satelliteName[30];
+    for (int i = 0; i < 30; i++)
+      satelliteName[i] = 0;
 
     // Read the satellite name
     int satNameLength = swarmFile.readBytesUntil('\n', (char *)satelliteName, 30);
