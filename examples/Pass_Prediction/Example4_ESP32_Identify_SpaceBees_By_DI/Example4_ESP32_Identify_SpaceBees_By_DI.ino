@@ -12,7 +12,7 @@
   This example shows how to identify passing SpaceBees by their DI identifier, converting it to SpaceBee numbering
   by doing a pass prediction as the satellite passes through maximum altitude.
   
-  It uses the CelesTrak Two-Line Element data collected by example: Example2_ESP32_Get_My_Swarm_TLEs
+  It uses the CelesTrak Two-Line Element data collected by example: Example1_ESP32_Get_Swarm_TLEs
   
   ** If you have enjoyed this code, please consider making a donation to CelesTrak: https://celestrak.org/ **
 
@@ -25,6 +25,8 @@
   SparkFun Thing Plus C - ESP32 WROOM
 
 */
+
+//#define printSatDebug // Uncomment this line to print extra debug messages on Serial
 
 #if !defined(LED_BUILTIN)
 #define LED_BUILTIN 13 // Change if required
@@ -78,8 +80,8 @@ double minimumElevation = 5.0; //                        <-- Update this if requ
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-// Storage for the last 25 $RT messages
-#define maxRIs 25
+// Storage for the $RT messages
+#define maxRIs 40
 struct storedRI
 {
   int16_t fdev;
@@ -338,6 +340,12 @@ void loop()
           // If both FDEV are -ve, delete the older one
           if ((storedRIs[i].fdev < 0) && (storedRIs[j].fdev < 0))
           {
+            #ifdef printSatDebug
+            Serial.print(F("Deleting DI 0x"));
+            Serial.print(storedRIs[j].sat_id, HEX);
+            Serial.print(F(" with FDEV "));
+            Serial.println(storedRIs[j].fdev);
+            #endif
             storedRIs[j].fdev = 0;
             storedRIs[j].unixTime = 0;
             storedRIs[j].sat_id = 0;
@@ -345,6 +353,12 @@ void loop()
           // If both FDEV are +ve, delete the newer one
           else if ((storedRIs[i].fdev > 0) && (storedRIs[j].fdev > 0))
           {
+            #ifdef printSatDebug
+            Serial.print(F("Deleting DI 0x"));
+            Serial.print(storedRIs[i].sat_id, HEX);
+            Serial.print(F(" with FDEV "));
+            Serial.println(storedRIs[i].fdev);            
+            #endif
             storedRIs[i].fdev = 0;
             storedRIs[i].unixTime = 0;
             storedRIs[i].sat_id = 0;
@@ -352,6 +366,12 @@ void loop()
           // If FDEV was +ve but is now -ve, delete the older one
           else if ((storedRIs[j].fdev > 0) && (storedRIs[i].fdev < 0))
           {
+            #ifdef printSatDebug
+            Serial.print(F("Deleting DI 0x"));
+            Serial.print(storedRIs[j].sat_id, HEX);
+            Serial.print(F(" with FDEV "));
+            Serial.println(storedRIs[j].fdev);            
+            #endif
             storedRIs[j].fdev = 0;
             storedRIs[j].unixTime = 0;
             storedRIs[j].sat_id = 0;
@@ -366,7 +386,10 @@ void loop()
             double fdevPerSec = ((double)deltaFDEV) / ((double)messageInterval);
             transitTime = storedRIs[i].unixTime - ((uint32_t)(((double)storedRIs[i].fdev) / fdevPerSec));
             
-            // Delete the older message to avoid processing it twice
+            // Delete the messages to avoid processing them twice
+            storedRIs[i].fdev = 0;
+            storedRIs[i].unixTime = 0;
+            storedRIs[i].sat_id = 0;
             storedRIs[j].fdev = 0;
             storedRIs[j].unixTime = 0;
             storedRIs[j].sat_id = 0;
@@ -382,15 +405,17 @@ void loop()
 
   if (transitSat > 0)
   {
+    #ifdef printSatDebug
     Serial.print(F("Finding the best match for DI 0x"));
     Serial.print(transitSat, HEX);
     Serial.print(F(" at Unix time "));
     Serial.println(transitTime);
+    #endif
   
     //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
     // Open the TLE file
     
-    File tleFile = SD.open("/mySwmTLE.txt", FILE_READ);
+    File tleFile = SD.open("/swarmTLE.txt", FILE_READ);
   
     if (!tleFile)
     {
@@ -434,12 +459,8 @@ void loop()
     
         // Check we have enough data
         if ((satNameLength < 25) || (lineOneLength < 70) || (lineTwoLength < 70))
-        {
-          
-          Serial.println();
-          Serial.println(F("End of mySwmTLE.txt"));
+        {          
           keepGoing = false;
-          
         }
         else
         {
@@ -465,7 +486,16 @@ void loop()
       Serial.print(F("Best match for DI 0x"));
       Serial.print(transitSat, HEX);
       Serial.print(F(" is "));
-      Serial.println(bestSatelliteName);      
+      Serial.print(bestSatelliteName);      
+      #ifdef printSatDebug
+      Serial.print(F(" (with a "));
+      if (bestPassJD > 0.00006) // If the error is > 5 seconds
+        Serial.print(F("*large* "));
+      Serial.print(F("Julian Day error of "));
+      Serial.print(bestPassJD, 6);      
+      Serial.print(F(")"));
+      #endif
+      Serial.println();
     }
   }
 }
