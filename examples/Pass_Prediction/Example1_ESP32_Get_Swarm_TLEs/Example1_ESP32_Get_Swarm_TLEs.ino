@@ -1,7 +1,7 @@
 /*
   Use ESP32 WiFi to get the Two-Line Elements for the Swarm satellites
   By: SparkFun Electronics / Paul Clark
-  Date: July 9th, 2022
+  Date: July 31st, 2022
   License: MIT. See license file for more information but you can
   basically do whatever you want with this code.
 
@@ -24,23 +24,59 @@
   Update secrets.h with your:
   - WiFi credentials
 
-  This example is written for the SparkFun Thing Plus C (SPX-18018) but can be adapted for any ESP32 board.
+  Update July 31st, 2022: the geospatial location is requested from the modem. Uncomment #define noModemGeospatial below to
+  specify a different location.
 
-  Use the Boards Manager to install the "ESP32 Arduino" boards.
-  
-  Add https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-  to your "Preferences \ Additional Boards Manager URLs" if required.
-  
-  Select "ESP32 Dev Module" as the Board (not "SparkFun ESP32 Thing Plus").
+  This example is written for the SparkFun Thing Plus C but can be adapted for any ESP32 board.
 
-  If the SD card is not detected ("Card Mount Failed"), try adding a pull-up resistor between
-  19/CIPO and 3V3. A resistor in the range 10K - 1M seems to help.
+  If the SD card is not detected ("Card Mount Failed"), try adding a 10K pull-up resistor between 19/POCI and 3V3.
 
   Feel like supporting open source hardware?
   Buy a board from SparkFun!
-  SparkFun Thing Plus C - ESP32 WROOM: https://www.sparkfun.com/products/18018
+  SparkFun Thing Plus C - ESP32 WROOM
 
 */
+
+//#define noModemGeospatial // Uncomment this line if you want to define your own location for the pass predictions
+
+#ifdef noModemGeospatial
+
+const char myLatitude[] =   "55.000";     //                  <-- Update this with your latitude if desired
+const char myLongitude[] =  "-1.000";     //                  <-- Update this with your longitude if desired
+const char myAltitude[] =   "100";        //                  <-- Update this with your altitude in m if desired
+
+#else
+
+#include <SparkFun_Swarm_Satellite_Arduino_Library.h> //Click here to get the library:  http://librarymanager/All#SparkFun_Swarm_Satellite
+
+SWARM_M138 mySwarm;
+
+#if defined(ARDUINO_ESP32_DEV)
+// If you are using the ESP32 Dev Module board definition, you need to create the HardwareSerial manually:
+#pragma message "Using HardwareSerial for M138 communication - on ESP32 Dev Module"
+HardwareSerial swarmSerial(2); //TX on 17, RX on 16
+#else
+// Serial1 is supported by the new SparkFun ESP32 Thing Plus C board definition
+#pragma message "Using Serial1 for M138 communication"
+#define swarmSerial Serial1 // Use Serial1 to communicate with the modem. Change this if required.
+#endif
+
+// If you are using the Swarm Satellite Transceiver MicroMod Function Board:
+//
+// The Function Board has an onboard power switch which controls the power to the modem.
+// The power is disabled by default.
+// To enable the power, you need to pull the correct PWR_EN pin high.
+//
+// Uncomment and adapt a line to match your Main Board and Processor configuration:
+//#define swarmPowerEnablePin A1 // MicroMod Main Board Single (DEV-18575) : with a Processor Board that supports A1 as an output
+//#define swarmPowerEnablePin 39 // MicroMod Main Board Single (DEV-18575) : with e.g. the Teensy Processor Board using pin 39 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin 4  // MicroMod Main Board Single (DEV-18575) : with e.g. the Artemis Processor Board using pin 4 (SDIO_DATA2) to control the power
+//#define swarmPowerEnablePin G5 // MicroMod Main Board Double (DEV-18576) : Slot 0 with the ALT_PWR_EN0 set to G5<->PWR_EN0
+//#define swarmPowerEnablePin G6 // MicroMod Main Board Double (DEV-18576) : Slot 1 with the ALT_PWR_EN1 set to G6<->PWR_EN1
+
+#endif
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #include <FS.h>
 #include <SD.h>
@@ -81,10 +117,6 @@ const char lonPrefix[] = "&lon=";
 const char altPrefix[] = "&alt=";
 const char mergeSuffix[] = "&merge=false";
 
-const char myLatitude[] =   "55.000";     //                  <-- Update this with your latitude
-const char myLongitude[] =  "-1.000";     //                  <-- Update this with your longitude
-const char myAltitude[] =   "100";        //                  <-- Update this with your altitude in m
-
 // The pass checker data is returned in non-pretty JSON format:
 #define startOfFirstStartPass 32  // 8000\r\n{"passes":[{"start_pass":"YYYY-MM-DDTHH:MM:SSZ
                                   // ----- - --------------------------^
@@ -95,9 +127,9 @@ const char myAltitude[] =   "100";        //                  <-- Update this wi
 
 // At the time or writing:
 //  Swarm satellites are named: SPACEBEE-n or SPACEBEENZ-n
-//  SPACEBEE numbers are 1 - 139 (8 and 9 are missing)
-//  SPACEBEENZ numbers are 1 - 14
-const int maxSats = 152;
+//  SPACEBEE numbers are 1 - 155 (8 and 9 are missing)
+//  SPACEBEENZ numbers are 1 - 22
+const int maxSats = 176;
 
 // Stop checking when we find this many satellite duplications for a single satellite
 // (When > 24 hours of passes have been processed)
@@ -106,12 +138,14 @@ const int maxSats = 152;
 // Ignore any false positives (satellites with fewer than this many passes)
 #define satPassFloor 2
 
-// Check for a match: start_pass +/- 5.0 seconds (in Julian Days)
-const double predictionStartError = 0.000058;
-// Check for a match: end_pass +/- 5.0 seconds (in Julian Days)
-const double predictionEndError = 0.000058;
-// Check for a match: max_elevation +/- 5.0 degrees (accuracy is worst at Zenith, much better towards the horizon)
-const double maxElevationError = 5.0;
+// Check for a match: start_pass +/- 2.5 seconds (in Julian Days)
+const double predictionStartError = 0.000029;
+// Check for a match: end_pass +/- 2.5 seconds (in Julian Days)
+const double predictionEndError = 0.000029;
+// Check for a match on max_elevation. Accuracy is worst at Zenith, much better towards the horizon.
+const double maxElevationError = 2.0;
+const double elevationZenith = 70.0;
+const double maxElevationErrorZenith = 5.0;
 
 #define nzOffset 100000 // Add this to the satellite number to indicate SPACEBEENZ
 
@@ -119,8 +153,14 @@ const double maxElevationError = 5.0;
 
 void setup()
 {
-  delay(1000);
+  // Swarm Satellite Transceiver MicroMod Function Board PWR_EN
+  #ifdef swarmPowerEnablePin
+  pinMode(swarmPowerEnablePin, OUTPUT); // Enable modem power 
+  digitalWrite(swarmPowerEnablePin, HIGH);
+  #endif
 
+  delay(1000);
+  
   Serial.begin(115200);
   Serial.println(F("Example : Swarm Two-Line Elements for your location"));
 
@@ -128,6 +168,45 @@ void setup()
   Serial.println(F("Press any key to begin..."));
   while (!Serial.available()); // Wait for a keypress
   Serial.println();
+
+  //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+  // Wait for the modem to get a GPS fix - if desired
+  
+#ifndef noModemGeospatial
+  //mySwarm.enableDebugging(); // Uncomment this line to enable debug messages on Serial
+
+  bool modemBegun = mySwarm.begin(swarmSerial); // Begin communication with the modem
+  
+  while (!modemBegun) // If the begin failed, keep trying to begin communication with the modem
+  {
+    Serial.println(F("Could not communicate with the modem. It may still be booting..."));
+    delay(2000);
+    modemBegun = mySwarm.begin(swarmSerial);
+  }
+
+  // Call getGeospatialInfo to request the most recent geospatial information
+  Swarm_M138_GeospatialData_t info;
+  
+  Swarm_M138_Error_e err = mySwarm.getGeospatialInfo(&info);
+  
+  while (err != SWARM_M138_SUCCESS)
+  {
+    Serial.print(F("Swarm communication error: "));
+    Serial.print((int)err);
+    Serial.print(F(" : "));
+    Serial.println(mySwarm.modemErrorString(err)); // Convert the error into printable text
+    Serial.println(F("The modem may not have acquired a valid GPS fix..."));
+    delay(2000);
+    err = mySwarm.getGeospatialInfo(&info);
+  }
+
+  Serial.print(F("getGeospatialInfo returned: "));
+  Serial.print(info.lat, 4);
+  Serial.print(F(","));
+  Serial.print(info.lon, 4);
+  Serial.print(F(","));
+  Serial.println(info.alt);
+#endif
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   // Connect to WiFi.
@@ -273,6 +352,15 @@ void setup()
 
   payload = ""; // Clear the existing payload
   payloadSize = 0; // This will be updated with the length of the data we get from the server
+
+#ifndef noModemGeospatial
+  char myLatitude[12];
+  sprintf(myLatitude, "%.4f", info.lat);
+  char myLongitude[12];
+  sprintf(myLongitude, "%.4f", info.lon);
+  char myAltitude[12];
+  sprintf(myAltitude, "%.2f", info.alt);
+#endif
 
   // Assemble the URL
   // Note the slash after the first %s
@@ -561,6 +649,8 @@ void setup()
   
       // Allocate 30 bytes to store the satellite name
       char satelliteName[30];
+      for (int i = 0; i < 30; i++)
+        satelliteName[i] = 0;
   
       // Read the satellite name
       int satNameLength = tleFile.readBytesUntil('\n', (char *)satelliteName, 30);
@@ -594,96 +684,122 @@ void setup()
         double overpassStart = 0.0, overpassEnd = 0.0, overpassMaxElev = 0.0;
         double maxElevationDbl = (double)maxElevation;
 
+        // Store the last 10 predictions to try and avoid duplicates
+        static unsigned long lastSatNums[10] = {0,0,0,0,0,0,0,0,0,0};
+        static double lastOverpassStarts[10] = {0,0,0,0,0,0,0,0,0,0};
+
         // Calculate the next overpass
         // Start one minute early 
         if (Predict(predictionStart - (1.0 / (24.0 * 60.0)), &overpassStart, &overpassEnd, &overpassMaxElev))
         {
+          double maxElevErr = (overpassMaxElev > elevationZenith) ? maxElevationErrorZenith : maxElevationError;
+
+          // Convert the satellite number to integer
+          unsigned long satNum = 0;
+          if (satelliteName[8] == '-') // Look for SPACEBEE-nnn
+          {
+            satNum = satelliteName[9] - '0'; // Extract the satellite number (max 99999)
+            if ((satelliteName[10] >= '0') && (satelliteName[10] <= '9'))
+            {
+              satNum *= 10;
+              satNum += satelliteName[10] - '0';
+              if ((satelliteName[11] >= '0') && (satelliteName[11] <= '9'))
+              {
+                satNum *= 10;
+                satNum += satelliteName[11] - '0';
+                if ((satelliteName[12] >= '0') && (satelliteName[12] <= '9'))
+                {
+                  satNum *= 10;
+                  satNum += satelliteName[12] - '0';
+                  if ((satelliteName[13] >= '0') && (satelliteName[13] <= '9'))
+                  {
+                    satNum *= 10;
+                    satNum += satelliteName[13] - '0';
+                  }
+                }
+              }
+            }
+          }
+          else if ((satelliteName[8] == 'N') && (satelliteName[9] == 'Z')) // Look for SPACEBEENZ-nnn
+          {
+            // Add nzOffset to the SPACEBEENZ numbers when recording them
+            satNum = nzOffset + satelliteName[11] - '0'; // Extract the satellite number (max 99999)
+            if ((satelliteName[12] >= '0') && (satelliteName[12] <= '9'))
+            {
+              satNum *= 10;
+              satNum += satelliteName[12] - '0';
+              if ((satelliteName[13] >= '0') && (satelliteName[13] <= '9'))
+              {
+                satNum *= 10;
+                satNum += satelliteName[13] - '0';
+                if ((satelliteName[14] >= '0') && (satelliteName[14] <= '9'))
+                {
+                  satNum *= 10;
+                  satNum += satelliteName[14] - '0';
+                  if ((satelliteName[15] >= '0') && (satelliteName[15] <= '9'))
+                  {
+                    satNum *= 10;
+                    satNum += satelliteName[15] - '0';
+                  }
+                }
+              }
+            }
+          }
+
+          bool duplicatePass = false;
+          for (int i = 0; i < 10; i++)
+          {
+            duplicatePass |= ((lastSatNums[i] == satNum) && (overpassStart >= lastOverpassStarts[i]) && (overpassStart <= (lastOverpassStarts[i] + predictionStartError)));
+          }
+          
           if  ((overpassStart < (predictionStart + predictionStartError)) // Check for a match
             && (overpassStart > (predictionStart - predictionStartError))
             && (overpassEnd < (predictionEnd + predictionEndError))
             && (overpassEnd > (predictionEnd - predictionEndError))
-            && (overpassMaxElev < (maxElevationDbl + maxElevationError))
-            && (overpassMaxElev > (maxElevationDbl - maxElevationError)))
+            && (overpassMaxElev < (maxElevationDbl + maxElevErr))
+            && (overpassMaxElev > (maxElevationDbl - maxElevErr)))
           {
-            Serial.print(F("Pass match found for satellite: "));
-            Serial.println((char *)satelliteName);
-
-            Serial.print(F("Prediction result was: start_pass Julian Day: "));
-            Serial.print(overpassStart, 5);
-            Serial.print(F("  end_pass Julian Day: "));
-            Serial.print(overpassEnd, 5);
-            Serial.print(F("  max_elevation: "));
-            Serial.println(overpassMaxElev, 3);
-          
-            // Record the match
-            unsigned long satNum = 0;
-            if (satelliteName[8] == '-') // Look for SPACEBEE-nnn
+            if (duplicatePass)
+              Serial.println(F("Probable duplicate pass. Skipping..."));
+            else
             {
-              satNum = satelliteName[9] - '0'; // Extract the satellite number (max 99999)
-              if ((satelliteName[10] >= '0') && (satelliteName[10] <= '9'))
+              Serial.print(F("Pass match found for satellite: "));
+              Serial.println((char *)satelliteName);
+  
+              Serial.print(F("Prediction result was: start_pass Julian Day: "));
+              Serial.print(overpassStart, 5);
+              Serial.print(F("  end_pass Julian Day: "));
+              Serial.print(overpassEnd, 5);
+              Serial.print(F("  max_elevation: "));
+              Serial.println(overpassMaxElev, 3);
+            
+              // Record the match
+              if (satNum > 0)
               {
-                satNum *= 10;
-                satNum += satelliteName[10] - '0';
-                if ((satelliteName[11] >= '0') && (satelliteName[11] <= '9'))
+                bool foundAgain = false;
+                for (int i = 0; i < foundNumSats; i++)
                 {
-                  satNum *= 10;
-                  satNum += satelliteName[11] - '0';
-                  if ((satelliteName[12] >= '0') && (satelliteName[12] <= '9'))
+                  if (foundSats[i] == satNum) // Have we found this satellite before?
                   {
-                    satNum *= 10;
-                    satNum += satelliteName[12] - '0';
-                    if ((satelliteName[13] >= '0') && (satelliteName[13] <= '9'))
-                    {
-                      satNum *= 10;
-                      satNum += satelliteName[13] - '0';
-                    }
+                    foundAgain = true;
+                    satPassCount[i] = satPassCount[i] + 1;
                   }
                 }
-              }
-            }
-            else if ((satelliteName[8] == 'N') && (satelliteName[9] == 'Z')) // Look for SPACEBEENZ-nnn
-            {
-              // Add nzOffset to the SPACEBEENZ numbers when recording them
-              satNum = nzOffset + satelliteName[11] - '0'; // Extract the satellite number (max 99999)
-              if ((satelliteName[12] >= '0') && (satelliteName[12] <= '9'))
-              {
-                satNum *= 10;
-                satNum += satelliteName[12] - '0';
-                if ((satelliteName[13] >= '0') && (satelliteName[13] <= '9'))
+                if ((!foundAgain) && (foundNumSats < maxSats))
                 {
-                  satNum *= 10;
-                  satNum += satelliteName[13] - '0';
-                  if ((satelliteName[14] >= '0') && (satelliteName[14] <= '9'))
-                  {
-                    satNum *= 10;
-                    satNum += satelliteName[14] - '0';
-                    if ((satelliteName[15] >= '0') && (satelliteName[15] <= '9'))
-                    {
-                      satNum *= 10;
-                      satNum += satelliteName[15] - '0';
-                    }
-                  }
+                  foundSats[foundNumSats] = satNum;
+                  satPassCount[foundNumSats++] = 1;
                 }
+                keepReadingTLEs = false; // Stop searching after one match
               }
             }
-
-            if (satNum > 0)
+            for (int i = 0; i < 9; i++)
             {
-              bool foundAgain = false;
-              for (int i = 0; i < foundNumSats; i++)
-              {
-                if (foundSats[i] == satNum) // Have we found this satellite before?
-                {
-                  foundAgain = true;
-                  satPassCount[i] = satPassCount[i] + 1;
-                }
-              }
-              if ((!foundAgain) && (foundNumSats < maxSats))
-              {
-                foundSats[foundNumSats++] = satNum;
-              }
-              keepReadingTLEs = false; // Stop searching after one match
+              lastSatNums[i] = lastSatNums[i+1];
+              lastOverpassStarts[i] = lastOverpassStarts[i+1];
             }
+            lastSatNums[9] = satNum;
+            lastOverpassStarts[9] = overpassStart;
           }
         }
       }
