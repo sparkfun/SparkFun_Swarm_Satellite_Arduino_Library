@@ -5397,12 +5397,12 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
       // if (_printDebug == true)
       // {
       //   _debugPort->print(F("waitForResponse: errorStart: "));
-      //   _debugPort->println((char *)&_swarmBacklog[errorStartedAt]);
+      //   _debugPort->println((char *)&responseDest[errorStartedAt]);
       // }
-      err = checkChecksum((char *)&_swarmBacklog[errorStartedAt]);
+      err = checkChecksum((char *)&responseDest[errorStartedAt]);
       if (err == SWARM_M138_ERROR_SUCCESS)
       {
-        extractCommandError((char *)&_swarmBacklog[errorStartedAt]);
+        extractCommandError((char *)&responseDest[errorStartedAt]);
         err = SWARM_M138_ERROR_ERR;
       }
     }
@@ -5411,9 +5411,9 @@ Swarm_M138_Error_e SWARM_M138::waitForResponse(const char *expectedResponseStart
       // if (_printDebug == true)
       // {
       //   _debugPort->print(F("waitForResponse: responseStart: "));
-      //   _debugPort->println((char *)&_swarmBacklog[responseStartedAt]);
+      //   _debugPort->println((char *)&responseDest[responseStartedAt]);
       // }
-      err = checkChecksum((char *)&_swarmBacklog[responseStartedAt]);
+      err = checkChecksum((char *)&responseDest[responseStartedAt]);
     }
   }
   else
